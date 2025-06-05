@@ -1161,34 +1161,3 @@
     </script>
 </body>
 </html>
-
-Ok, vamos ajustar o código no Canvas com as correções. Pela imagem, o erro principal `auth/api-key-not-valid` ainda é o mais crítico, indicando que a chave de API que o Firebase está usando não é a correta. O erro de SVG também persiste.
-
-**Alterações Implementadas:**
-
-1.  **Lógica da Configuração do Firebase:**
-    * Criei uma constante `userProvidedFirebaseConfig` que armazena as suas credenciais.
-    * A lógica agora verifica se `__firebase_config` (do ambiente Canvas) existe.
-        * Se existir, tenta parseá-lo. Se o parse for bem-sucedido e a `apiKey` resultante **não for um placeholder óbvio** (não contiver "YOUR\_API\_KEY"), ele usará essa configuração do host.
-        * Caso contrário (se `__firebase_config` não existir, falhar no parse, ou contiver uma API key placeholder), ele usará **obrigatoriamente** a `userProvidedFirebaseConfig` que você forneceu.
-    * Adicionei um `console.log("Configuração Firebase ATIVA SENDO USADA:", JSON.stringify(activeFirebaseConfig));` para que você possa ver no console do navegador qual objeto de configuração está efetivamente sendo passado para `initializeApp`. Isso é crucial para o debugging.
-    * **Verifiquei o `storageBucket`**: No seu `firebaseConfig`, você tinha `gestao-finc-compartilhada.firebasestorage.app`. Eu o alterei para `gestao-finc-compartilhada.appspot.com` na `userProvidedFirebaseConfig`, pois `.appspot.com` é o formato mais comum para o bucket padrão. **Por favor, confirme no seu console do Firebase (Configurações do Projeto > Geral > Bucket de armazenamento do Cloud Storage padrão) qual é o valor correto para o seu projeto e ajuste se necessário.** Um `storageBucket` incorreto não impedirá o login, mas causará problemas com o Firebase Storage mais tarde.
-
-2.  **SVGs das Navbars e Templates Corrigidos:**
-    * Substituí todos os SVGs que estavam sendo usados como logo da aplicação (nas navbars e no template de login) por uma versão simplificada e corrigida que representa um ícone de "usuário/finanças". Isso deve resolver os erros `Error: <path> attribute d: Expected number,...`.
-
-3.  **Consistência do `appId` para Caminhos do Firestore:**
-    * Defini `appIdForFirestorePaths` para usar o `appIdFromHost` (que seria `__app_id` do ambiente Canvas, ou 'default-app-id'). Isso garante que os caminhos para salvar os perfis dos usuários no Firestore (ex: `artifacts/${appIdForFirestorePaths}/users/...`) sejam consistentes com o esperado pelo ambiente Canvas.
-
-O código atualizado está no Canvas.
-
-**Após esta atualização, por favor, teste novamente e verifique o console do navegador:**
-
-1.  **Procure pelo log:** `Configuração Firebase ATIVA SENDO USADA:` e confirme se a `apiKey` mostrada é a sua chave real (AIzaSyBeJyVD...).
-2.  Verifique se os erros de SVG desapareceram.
-3.  Tente fazer login e registrar um novo usuário.
-
-Se o erro `auth/api-key-not-valid` persistir *mesmo que o log mostre a API key correta*, os próximos passos seriam verificar:
-* Se a API Key está corretamente habilitada no Google Cloud Console para o seu projeto Firebase.
-* Se há restrições na API Key (por exemplo, restrições de HTTP referrers) que possam estar bloqueando as requisições do seu domínio de hospedagem.
-* Se os "Domínios autorizados" na seção de Autenticação do Firebase Console estão corretos para o seu site hospeda
