@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci && npm run build  # Este é o comando que precisa ser executado na pasta correta
-        working-directory: ./projetofirebase # <--- ADICIONE ESTA LINHA AQUI
+       # working-directory: ./projetofirebase # <--- ADICIONE ESTA LINHA AQUI
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
