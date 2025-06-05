@@ -513,17 +513,17 @@
         // O appId para os caminhos do Firestore deve ser o ID da aplicação no ambiente Canvas, se disponível.
         // Se não, usamos o appId do projeto Firebase como fallback para os caminhos, mas idealmente appIdFromHostForPaths é o correto para a estrutura de `artifacts`.
         let appIdForFirestorePaths = appIdFromHostForPaths;
-        if (appIdForFirestorePaths === 'default-app-id' && activeFirebaseConfig.appId) {
-            // Se __app_id não estiver disponível ou for 'default-app-id',
-            // e tivermos um appId da configuração do Firebase, usamos esse para os caminhos do Firestore.
-            // Isso é um fallback caso o app esteja rodando fora do Canvas, diretamente no Firebase Hosting.
-            // No entanto, a estrutura 'artifacts/PROJECT_APP_ID/users/...' é mais comum que 'artifacts/default-app-id/users/...'
-            // Idealmente, o ambiente de deploy (Canvas ou outro) deveria fornecer o __app_id correto para os caminhos.
-            // Se o seu Firestore está estruturado com o `appId` do *projeto* Firebase em vez de um `__app_id` do Canvas,
-            // você pode querer usar `activeFirebaseConfig.appId` aqui diretamente.
-            // Por segurança e consistência com as instruções anteriores, vamos manter a prioridade do __app_id.
+        if (appIdForFirestorePaths === 'default-app-id' && activeFirebaseConfig.appId && !activeFirebaseConfig.appId.includes("YOUR_APP_ID")) {
+            // Se __app_id é 'default-app-id' (ou seja, não foi fornecido pelo host ou é literalmente 'default-app-id')
+            // E activeFirebaseConfig.appId é um ID válido (não um placeholder),
+            // ENTÃO use o appId do projeto Firebase para os caminhos do Firestore.
+            // Isso ajuda se o app estiver hospedado diretamente no Firebase e __app_id não for definido pelo Canvas.
+            appIdForFirestorePaths = activeFirebaseConfig.appId;
+            console.log(`appIdForFirestorePaths era 'default-app-id' ou não definido pelo host, usando activeFirebaseConfig.appId para caminhos do Firestore: ${appIdForFirestorePaths}`);
+        } else if (appIdForFirestorePaths === 'default-app-id'){
+             console.warn("appIdForFirestorePaths é 'default-app-id' e não foi possível obter um appId válido da configuração Firebase. Os caminhos do Firestore podem estar incorretos, usando 'default-app-id'.");
         }
-        console.log("App ID usado para caminhos do Firestore:", appIdForFirestorePaths);
+        console.log("App ID FINALMENTE usado para caminhos do Firestore:", appIdForFirestorePaths);
 
 
         // --- Variáveis Globais de Estado ---
@@ -847,12 +847,27 @@
         // IMPORTANTE: Verifique suas REGRAS DE SEGURANÇA do Firestore.
         // Elas precisam permitir a leitura do caminho:
         // `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/profile/${currentUserId}`
-        // Exemplo de regra (AJUSTE CONFORME NECESSÁRIO):
-        // match /artifacts/{appId}/users/{userId}/profile/{profileDocId} {
-        //   allow read, write: if request.auth != null && request.auth.uid == userId && userId == profileDocId;
+        // Exemplo de regra (AJUSTE CONFORME NECESSÁRIO PARA SEU `appIdForFirestorePaths`):
+        //
+        // Se appIdForFirestorePaths = "seu-project-app-id-real" (ex: 1:988873226213:web:8cb05b07ba7c48e574e10c)
+        // match /databases/{database}/documents {
+        //   match /artifacts/1:988873226213:web:8cb05b07ba7c48e574e10c/users/{userId}/profile/{profileDocId} {
+        //     allow read, write: if request.auth != null && request.auth.uid == userId && userId == profileDocId;
+        //   }
         // }
+        //
+        // Se appIdForFirestorePaths = "default-app-id" (o que pode acontecer se __app_id não for injetado)
+        // match /databases/{database}/documents {
+        //   match /artifacts/default-app-id/users/{userId}/profile/{profileDocId} {
+        //     allow read, write: if request.auth != null && request.auth.uid == userId && userId == profileDocId;
+        //   }
+        // }
+        //
+        // É crucial que o caminho na regra corresponda ao `userProfilePath` logado no console.
         async function initDashboardPage() {
             console.log("Inicializando Dashboard...");
+            console.log("Chart object available in initDashboardPage?", typeof Chart);
+
             if (!currentUserId) {
                 console.warn("Usuário não logado, não pode inicializar dashboard. Redirecionando para login.");
                 navigateTo('/login');
@@ -863,6 +878,7 @@
             const userProfilePath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/profile/${currentUserId}`;
             const userDocRef = doc(db, userProfilePath);
             console.log("Tentando buscar perfil do usuário em:", userProfilePath);
+            console.log("Com currentUserId:", currentUserId);
 
 
             try {
@@ -877,7 +893,7 @@
                 }
             } catch (error) {
                 console.error("Erro CRÍTICO ao buscar dados do usuário no Firestore:", error);
-                if (error.code === 'permission-denied' || error.message.toLowerCase().includes('permission') || error.message.toLowerCase().includes('permissions')) {
+                if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission'))) {
                      console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE !!!! Verifique suas Regras de Segurança no console do Firebase para o caminho:", userProfilePath);
                      if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro de permissão)";
                 } else {
@@ -908,8 +924,12 @@
             if (typeof Chart !== 'undefined') {
                 initCharts();
             } else {
-                console.error("Chart.js não está definido. Não é possível inicializar os gráficos.");
+                console.error("Chart.js não está definido ANTES de chamar initCharts. Verifique a inclusão da CDN e possíveis conflitos.");
                  // Pode exibir uma mensagem na UI aqui, se desejar.
+                 const expensesCanvas = document.getElementById('expenses-pie-chart');
+                 if (expensesCanvas && expensesCanvas.parentElement) expensesCanvas.parentElement.innerHTML = '<p class="text-center text-red-500">Erro ao carregar gráfico de despesas.</p>';
+                 const incomeCanvas = document.getElementById('income-expenses-bar-chart');
+                 if (incomeCanvas && incomeCanvas.parentElement) incomeCanvas.parentElement.innerHTML = '<p class="text-center text-red-500">Erro ao carregar gráfico de receitas/despesas.</p>';
             }
         }
 
@@ -918,9 +938,11 @@
 
         function initCharts() {
              if (typeof Chart === 'undefined') { // Verificação extra
-                console.error("Chart.js ainda não definido ao tentar executar initCharts.");
+                console.error("Chart.js ainda não definido DENTRO de initCharts. Isso não deveria acontecer se a verificação anterior passou.");
                 return;
             }
+            console.log("Chart object available in initCharts:", typeof Chart);
+
             const isDarkMode = document.documentElement.classList.contains('dark');
             const textColor = isDarkMode ? '#CBD5E1' : '#4A5568'; // slate-300 para dark, gray-600 para light
             const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
@@ -966,6 +988,8 @@
                         }
                     }
                 });
+            } else {
+                console.warn("Elemento canvas 'expenses-pie-chart' não encontrado para o gráfico de despesas.");
             }
 
             // Gráfico de Barras (Receitas vs Despesas)
@@ -1018,6 +1042,8 @@
                         }
                     }
                 });
+            } else {
+                 console.warn("Elemento canvas 'income-expenses-bar-chart' não encontrado para o gráfico de receitas/despesas.");
             }
         }
 
@@ -1142,6 +1168,8 @@
                  // Atraso para garantir que o DOM do dashboard foi renderizado
                 if (typeof Chart !== 'undefined') {
                     setTimeout(initCharts, 50);
+                } else {
+                    console.warn("Chart não definido ao tentar redesenhar para o tema.");
                 }
             }
         }
