@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meu App de Finanças</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Adicionada CDN do Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -510,7 +512,17 @@
         const storage = getStorage(app);
         // O appId para os caminhos do Firestore deve ser o ID da aplicação no ambiente Canvas, se disponível.
         // Se não, usamos o appId do projeto Firebase como fallback para os caminhos, mas idealmente appIdFromHostForPaths é o correto para a estrutura de `artifacts`.
-        const appIdForFirestorePaths = appIdFromHostForPaths;
+        let appIdForFirestorePaths = appIdFromHostForPaths;
+        if (appIdForFirestorePaths === 'default-app-id' && activeFirebaseConfig.appId) {
+            // Se __app_id não estiver disponível ou for 'default-app-id',
+            // e tivermos um appId da configuração do Firebase, usamos esse para os caminhos do Firestore.
+            // Isso é um fallback caso o app esteja rodando fora do Canvas, diretamente no Firebase Hosting.
+            // No entanto, a estrutura 'artifacts/PROJECT_APP_ID/users/...' é mais comum que 'artifacts/default-app-id/users/...'
+            // Idealmente, o ambiente de deploy (Canvas ou outro) deveria fornecer o __app_id correto para os caminhos.
+            // Se o seu Firestore está estruturado com o `appId` do *projeto* Firebase em vez de um `__app_id` do Canvas,
+            // você pode querer usar `activeFirebaseConfig.appId` aqui diretamente.
+            // Por segurança e consistência com as instruções anteriores, vamos manter a prioridade do __app_id.
+        }
         console.log("App ID usado para caminhos do Firestore:", appIdForFirestorePaths);
 
 
@@ -820,6 +832,10 @@
                     return 'Muitas tentativas de login. Tente novamente mais tarde.';
                 case 'auth/network-request-failed':
                     return 'Falha na rede. Verifique sua conexão com a internet.';
+                case 'auth/cancelled-popup-request':
+                     return 'Solicitação de login pop-up cancelada ou bloqueada.';
+                case 'auth/popup-closed-by-user':
+                     return 'Janela de login fechada antes da conclusão.';
                 default:
                     console.warn("Erro Firebase não mapeado:", error.code, error.message);
                     return 'Ocorreu um erro. Tente novamente.';
@@ -828,10 +844,17 @@
 
 
         // --- Lógica do Dashboard ---
+        // IMPORTANTE: Verifique suas REGRAS DE SEGURANÇA do Firestore.
+        // Elas precisam permitir a leitura do caminho:
+        // `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/profile/${currentUserId}`
+        // Exemplo de regra (AJUSTE CONFORME NECESSÁRIO):
+        // match /artifacts/{appId}/users/{userId}/profile/{profileDocId} {
+        //   allow read, write: if request.auth != null && request.auth.uid == userId && userId == profileDocId;
+        // }
         async function initDashboardPage() {
             console.log("Inicializando Dashboard...");
             if (!currentUserId) {
-                console.log("Usuário não logado, não pode inicializar dashboard.");
+                console.warn("Usuário não logado, não pode inicializar dashboard. Redirecionando para login.");
                 navigateTo('/login');
                 return;
             }
@@ -839,20 +862,27 @@
             const userNameEl = document.getElementById('user-name-dashboard');
             const userProfilePath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/profile/${currentUserId}`;
             const userDocRef = doc(db, userProfilePath);
+            console.log("Tentando buscar perfil do usuário em:", userProfilePath);
 
 
             try {
                 const docSnap = await getDoc(userDocRef);
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
+                    console.log("Dados do perfil do usuário encontrados:", userData);
                     if (userNameEl) userNameEl.textContent = userData.name || currentUser.displayName || 'Usuário';
                 } else {
-                    console.log("Documento do usuário não encontrado no Firestore:", userProfilePath, "- pode ser um usuário do Google que ainda não tem perfil ou um erro.");
-                     if (userNameEl) userNameEl.textContent = currentUser.displayName || 'Usuário';
+                    console.warn("Documento do usuário NÃO encontrado no Firestore em:", userProfilePath, "- Isso pode ser normal para um novo usuário do Google ou se o `appIdForFirestorePaths` estiver incorreto para o seu setup.");
+                     if (userNameEl) userNameEl.textContent = currentUser.displayName || 'Usuário'; // Fallback para o nome do Auth
                 }
             } catch (error) {
-                console.error("Erro ao buscar dados do usuário no Firestore:", error);
-                 if (userNameEl) userNameEl.textContent = currentUser.displayName || 'Usuário';
+                console.error("Erro CRÍTICO ao buscar dados do usuário no Firestore:", error);
+                if (error.code === 'permission-denied' || error.message.toLowerCase().includes('permission') || error.message.toLowerCase().includes('permissions')) {
+                     console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE !!!! Verifique suas Regras de Segurança no console do Firebase para o caminho:", userProfilePath);
+                     if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro de permissão)";
+                } else {
+                    if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro ao carregar dados)";
+                }
             }
 
             // TODO: Carregar dados de receitas, despesas, gráficos, lançamentos recentes
@@ -874,13 +904,23 @@
             }
 
             // Inicializar Gráficos (exemplo com Chart.js)
-            initCharts();
+            // Verifica se Chart está definido antes de chamar initCharts
+            if (typeof Chart !== 'undefined') {
+                initCharts();
+            } else {
+                console.error("Chart.js não está definido. Não é possível inicializar os gráficos.");
+                 // Pode exibir uma mensagem na UI aqui, se desejar.
+            }
         }
 
         let expensesPieChartInstance = null;
         let incomeExpensesBarChartInstance = null;
 
         function initCharts() {
+             if (typeof Chart === 'undefined') { // Verificação extra
+                console.error("Chart.js ainda não definido ao tentar executar initCharts.");
+                return;
+            }
             const isDarkMode = document.documentElement.classList.contains('dark');
             const textColor = isDarkMode ? '#CBD5E1' : '#4A5568'; // slate-300 para dark, gray-600 para light
             const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
@@ -1100,7 +1140,9 @@
             // Redesenha os gráficos se a página atual for o dashboard
             if (window.location.hash.slice(1) === '/' || window.location.hash === '') {
                  // Atraso para garantir que o DOM do dashboard foi renderizado
-                setTimeout(initCharts, 50);
+                if (typeof Chart !== 'undefined') {
+                    setTimeout(initCharts, 50);
+                }
             }
         }
 
