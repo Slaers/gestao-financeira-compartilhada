@@ -68,7 +68,7 @@
     </div>
 
     <!-- Modals Globais -->
-    <div id="modal-backdrop" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40"></div>
+    <div id="modal-backdrop" class="fixed inset-0 bg-black bg-opacity-75 hidden z-40 transition-opacity duration-300"></div>
     <div id="modal-container" class="fixed inset-0 flex items-center justify-center hidden z-50 p-4">
         <!-- Conteúdo do Modal será injetado aqui -->
     </div>
@@ -185,7 +185,7 @@
 
     <template id="dashboard-template">
         <div class="p-4 md:p-8">
-            <h1 class="text-3xl md:text-4xl font-bold mb-6 text-gray-800 dark:text-white">Seu painel financeiro</h1>
+            <h1 class="text-3xl md:text-4xl font-bold mb-6 text-gray-800 dark:text-white">Seu Painel Financeiro</h1>
             <p class="text-lg text-gray-600 dark:text-gray-300 mb-8">Bem-vindo(a) de volta, <span id="user-name-dashboard" class="font-semibold">Usuário</span>!</p>
 
             <!-- Resumo Financeiro -->
@@ -390,6 +390,104 @@
             </div>
         </div>
     </template>
+    
+    <!-- NOVO: Template da Página de Lançamentos -->
+    <template id="lancamentos-template">
+        <div class="relative min-h-[calc(100vh-200px)]">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white">Lançamentos</h1>
+                <!-- Filtros (ainda sem funcionalidade) -->
+                <div class="hidden sm:flex items-center p-1 rounded-lg bg-gray-200 dark:bg-gray-700">
+                    <button class="px-4 py-2 text-sm font-semibold rounded-md bg-white dark:bg-gray-800 text-primary-DEFAULT shadow">Pessoal</button>
+                    <button class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300">Grupo</button>
+                </div>
+            </div>
+
+            <div id="lancamentos-list" class="space-y-4">
+                <!-- A lista de lançamentos será injetada aqui pelo JavaScript -->
+                 <p id="lancamentos-list-placeholder" class="text-center text-gray-500 dark:text-gray-400 py-16">
+                    Nenhum lançamento encontrado.<br>
+                    Clique no botão '+' para adicionar um.
+                </p>
+            </div>
+
+            <!-- Botão Flutuante para Adicionar Lançamento -->
+            <button id="add-lancamento-btn" class="fixed bottom-24 right-8 md:bottom-12 md:right-12 bg-primary-DEFAULT hover:bg-primary-hover text-white rounded-full p-4 shadow-lg transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-DEFAULT">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+            </button>
+        </div>
+    </template>
+
+    <!-- NOVO: Template do Modal de Adicionar/Editar Lançamento -->
+    <template id="lancamento-modal-template">
+        <div class="bg-white dark:bg-secondary rounded-xl shadow-2xl p-8 w-full max-w-lg transform transition-all opacity-100 scale-100">
+             <form id="lancamento-form">
+                <input type="hidden" id="lancamento-id">
+                <h3 id="lancamento-modal-title" class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Novo Lançamento</h3>
+                
+                <!-- Tipo: Receita ou Despesa -->
+                <fieldset class="mb-4">
+                    <legend class="sr-only">Tipo de lançamento</legend>
+                    <div class="flex items-center justify-around bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                        <label for="tipo-receita" class="w-full text-center">
+                            <input type="radio" name="tipo-lancamento" id="tipo-receita" value="receita" class="sr-only" checked>
+                            <span class="cursor-pointer block px-4 py-2 rounded-md text-sm font-semibold transition-colors text-gray-600 dark:text-gray-300">Receita</span>
+                        </label>
+                        <label for="tipo-despesa" class="w-full text-center">
+                            <input type="radio" name="tipo-lancamento" id="tipo-despesa" value="despesa" class="sr-only">
+                            <span class="cursor-pointer block px-4 py-2 rounded-md text-sm font-semibold transition-colors text-gray-600 dark:text-gray-300">Despesa</span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <!-- Valor -->
+                <div class="mb-4">
+                     <label for="lancamento-valor" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor</label>
+                     <div class="relative mt-1">
+                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span class="text-gray-500 sm:text-sm">R$</span>
+                        </div>
+                        <input type="number" step="0.01" min="0" name="valor" id="lancamento-valor" required
+                               class="block w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-primary-DEFAULT focus:border-primary-DEFAULT sm:text-sm">
+                    </div>
+                </div>
+
+                <!-- Descrição -->
+                <div class="mb-4">
+                     <label for="lancamento-descricao" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição</label>
+                     <input type="text" name="descricao" id="lancamento-descricao" required
+                           class="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-primary-DEFAULT focus:border-primary-DEFAULT sm:text-sm">
+                </div>
+
+                <!-- Categoria e Data -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="lancamento-categoria" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria</label>
+                        <select id="lancamento-categoria" name="categoria" required class="mt-1 block w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-primary-DEFAULT focus:border-primary-DEFAULT sm:text-sm">
+                            <option>Alimentação</option>
+                            <option>Transporte</option>
+                            <option>Lazer</option>
+                            <option>Moradia</option>
+                            <option>Salário</option>
+                            <option>Investimentos</option>
+                            <option>Outros</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="lancamento-data" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Data</label>
+                        <input type="date" name="data" id="lancamento-data" required class="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-DEFAULT focus:border-primary-DEFAULT sm:text-sm">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end space-x-4">
+                     <button type="button" id="close-lancamento-modal" class="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">Cancelar</button>
+                     <button type="submit" class="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-DEFAULT hover:bg-primary-hover">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </template>
 
     <template id="404-template">
         <div class="flex flex-col items-center justify-center text-center h-[calc(100vh-200px)]">
@@ -463,7 +561,8 @@
             serverTimestamp,
             deleteDoc,
             updateDoc,
-            writeBatch
+            writeBatch,
+            Timestamp
         } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
         // import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-analytics.js"; // Analytics não usado por enquanto
@@ -511,15 +610,10 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
         // O appId para os caminhos do Firestore deve ser o ID da aplicação no ambiente Canvas, se disponível.
-        // Se não, usamos o appId do projeto Firebase como fallback para os caminhos, mas idealmente appIdFromHostForPaths é o correto para a estrutura de `artifacts`.
         let appIdForFirestorePaths = appIdFromHostForPaths;
         if (appIdForFirestorePaths === 'default-app-id' && activeFirebaseConfig.appId && !activeFirebaseConfig.appId.includes("YOUR_APP_ID")) {
-            // Se __app_id é 'default-app-id' (ou seja, não foi fornecido pelo host ou é literalmente 'default-app-id')
-            // E activeFirebaseConfig.appId é um ID válido (não um placeholder),
-            // ENTÃO use o appId do projeto Firebase para os caminhos do Firestore.
-            // Isso ajuda se o app estiver hospedado diretamente no Firebase e __app_id não for definido pelo Canvas.
             appIdForFirestorePaths = activeFirebaseConfig.appId;
-            console.log(`appIdForFirestorePaths era 'default-app-id' ou não definido pelo host, usando activeFirebaseConfig.appId para caminhos do Firestore: ${appIdForFirestorePaths}`);
+            console.log(`appIdForFirestorePaths era 'default-app-id', usando activeFirebaseConfig.appId para caminhos do Firestore: ${appIdForFirestorePaths}`);
         } else if (appIdForFirestorePaths === 'default-app-id'){
              console.warn("appIdForFirestorePaths é 'default-app-id' e não foi possível obter um appId válido da configuração Firebase. Os caminhos do Firestore podem estar incorretos, usando 'default-app-id'.");
         }
@@ -529,6 +623,7 @@
         // --- Variáveis Globais de Estado ---
         let currentUser = null; // Armazena o objeto do usuário logado
         let currentUserId = null; // Armazena o UID do usuário logado
+        let unsubscribeLancamentos = null; // Para desligar o listener do Firestore ao sair da página
 
         // --- Constantes e Helpers ---
         const APP_NAME = "FinançasApp";
@@ -540,15 +635,20 @@
         const modalBackdrop = document.getElementById('modal-backdrop');
         const modalContainer = document.getElementById('modal-container');
 
-        function showModal(templateId, initFunction) {
+        function showModal(templateId, initFunction, modalData = {}) {
             const template = document.getElementById(templateId);
             if (template) {
                 modalContainer.innerHTML = template.innerHTML;
-                modalBackdrop.classList.remove('hidden');
-                modalContainer.classList.remove('hidden');
-                modalContainer.classList.add('flex'); // Garante que o modal esteja visível
+                modalContainer.style.display = 'flex';
+                modalBackdrop.style.display = 'block';
+                // Delay para animação
+                setTimeout(() => {
+                    modalContainer.querySelector('div').classList.remove('opacity-0', 'scale-95');
+                    modalBackdrop.classList.remove('opacity-0');
+                }, 10);
+
                 if (initFunction && typeof initFunction === 'function') {
-                    initFunction();
+                    initFunction(modalData); // Passa os dados para a função de inicialização
                 }
             } else {
                 console.error(`Template do modal ${templateId} não encontrado.`);
@@ -556,10 +656,15 @@
         }
 
         function closeModal() {
-            modalContainer.innerHTML = '';
-            modalBackdrop.classList.add('hidden');
-            modalContainer.classList.add('hidden');
-            modalContainer.classList.remove('flex');
+            if (modalContainer.firstChild) {
+                 modalContainer.querySelector('div').classList.add('opacity-0', 'scale-95');
+            }
+            modalBackdrop.classList.add('opacity-0');
+            setTimeout(() => {
+                modalContainer.innerHTML = '';
+                modalContainer.style.display = 'none';
+                modalBackdrop.style.display = 'none';
+            }, 300); // Duração da transição
         }
 
         // --- Roteador Simples ---
@@ -567,8 +672,8 @@
             '/': { templateId: 'dashboard-template', init: initDashboardPage, protected: true },
             '/login': { templateId: 'login-template', init: initLoginPage, publicOnly: true },
             '/register': { templateId: 'register-template', init: initRegisterPage, publicOnly: true },
+            '/lancamentos': { templateId: 'lancamentos-template', init: initLancamentosPage, protected: true },
             // Adicionar outras rotas aqui:
-            // '/lancamentos': { templateId: 'lancamentos-template', init: initLancamentosPage, protected: true },
             // '/investimentos': { templateId: 'investimentos-template', init: initInvestimentosPage, protected: true },
             // '/grupos': { templateId: 'grupos-template', init: initGruposPage, protected: true },
             // '/historico': { templateId: 'historico-template', init: initHistoricoPage, protected: true },
@@ -583,6 +688,13 @@
         }
 
         async function router() {
+            // Desligar listeners antigos antes de mudar de página
+            if (unsubscribeLancamentos) {
+                unsubscribeLancamentos();
+                unsubscribeLancamentos = null;
+                console.log("Listener de Lançamentos desligado.");
+            }
+
             initialLoader.style.display = 'flex'; // Mostrar loader
             appRoot.innerHTML = ''; // Limpar conteúdo anterior
 
@@ -628,7 +740,7 @@
             const navLinks = document.querySelectorAll('.nav-link, .mobile-nav-link');
             navLinks.forEach(link => {
                 const linkPath = link.getAttribute('href').slice(1); // Remove #
-                if (linkPath === currentPath || (currentPath === '/' && linkPath === '')) {
+                if (linkPath === currentPath) {
                     link.classList.add('text-primary-DEFAULT', 'dark:text-primary-light', 'bg-primary-DEFAULT/10', 'font-semibold');
                     link.classList.remove('text-gray-600', 'dark:text-gray-300');
                 } else {
@@ -844,30 +956,7 @@
 
 
         // --- Lógica do Dashboard ---
-        // IMPORTANTE: Verifique suas REGRAS DE SEGURANÇA do Firestore.
-        // Elas precisam permitir a leitura do caminho:
-        // `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/profile/${currentUserId}`
-        // Exemplo de regra (AJUSTE CONFORME NECESSÁRIO PARA SEU `appIdForFirestorePaths`):
-        //
-        // Se appIdForFirestorePaths = "seu-project-app-id-real" (ex: 1:988873226213:web:8cb05b07ba7c48e574e10c)
-        // match /databases/{database}/documents {
-        //   match /artifacts/1:988873226213:web:8cb05b07ba7c48e574e10c/users/{userId}/profile/{profileDocId} {
-        //     allow read, write: if request.auth != null && request.auth.uid == userId && userId == profileDocId;
-        //   }
-        // }
-        //
-        // Se appIdForFirestorePaths = "default-app-id" (o que pode acontecer se __app_id não for injetado)
-        // match /databases/{database}/documents {
-        //   match /artifacts/default-app-id/users/{userId}/profile/{profileDocId} {
-        //     allow read, write: if request.auth != null && request.auth.uid == userId && userId == profileDocId;
-        //   }
-        // }
-        //
-        // É crucial que o caminho na regra corresponda ao `userProfilePath` logado no console.
         async function initDashboardPage() {
-            console.log("Inicializando Dashboard...");
-            console.log("Chart object available in initDashboardPage?", typeof Chart);
-
             if (!currentUserId) {
                 console.warn("Usuário não logado, não pode inicializar dashboard. Redirecionando para login.");
                 navigateTo('/login');
@@ -877,178 +966,271 @@
             const userNameEl = document.getElementById('user-name-dashboard');
             const userProfilePath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/profile/${currentUserId}`;
             const userDocRef = doc(db, userProfilePath);
-            console.log("Tentando buscar perfil do usuário em:", userProfilePath);
-            console.log("Com currentUserId:", currentUserId);
-
-
             try {
                 const docSnap = await getDoc(userDocRef);
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
-                    console.log("Dados do perfil do usuário encontrados:", userData);
                     if (userNameEl) userNameEl.textContent = userData.name || currentUser.displayName || 'Usuário';
                 } else {
-                    console.warn("Documento do usuário NÃO encontrado no Firestore em:", userProfilePath, "- Isso pode ser normal para um novo usuário do Google ou se o `appIdForFirestorePaths` estiver incorreto para o seu setup.");
                      if (userNameEl) userNameEl.textContent = currentUser.displayName || 'Usuário'; // Fallback para o nome do Auth
                 }
             } catch (error) {
-                console.error("Erro CRÍTICO ao buscar dados do usuário no Firestore:", error);
-                if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission'))) {
-                     console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE !!!! Verifique suas Regras de Segurança no console do Firebase para o caminho:", userProfilePath);
-                     if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro de permissão)";
-                } else {
-                    if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro ao carregar dados)";
+                 if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro)";
+            }
+            
+            // Ouvir lançamentos para atualizar o dashboard
+            listenForLancamentosDashboard();
+        }
+
+        function listenForLancamentosDashboard() {
+            if (!currentUserId) return;
+
+            const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
+            const q = query(collection(db, lancamentosPath), orderBy('data', 'desc'));
+            
+            unsubscribeLancamentos = onSnapshot(q, (snapshot) => {
+                const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                updateDashboardUI(lancamentos);
+            }, (error) => {
+                console.error("Erro ao ouvir lançamentos para o dashboard:", error);
+                 if (error.code === 'permission-denied') {
+                    console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE NO DASHBOARD!!!! Verifique suas Regras de Segurança para o caminho:", lancamentosPath);
                 }
-            }
+            });
+        }
 
-            // TODO: Carregar dados de receitas, despesas, gráficos, lançamentos recentes
-            // Exemplo para popular os cards:
-            const totalReceitasEl = document.getElementById('dashboard-total-receitas');
-            const totalDespesasEl = document.getElementById('dashboard-total-despesas');
-            const saldoAtualEl = document.getElementById('dashboard-saldo-atual');
-            const totalInvestidoEl = document.getElementById('dashboard-total-investido');
+        function updateDashboardUI(lancamentos) {
+            let totalReceitas = 0;
+            let totalDespesas = 0;
+            const despesasPorCategoria = {};
 
-            if(totalReceitasEl) totalReceitasEl.textContent = "R$ 1.250,75"; // Placeholder
-            if(totalDespesasEl) totalDespesasEl.textContent = "R$ 780,30"; // Placeholder
-            if(saldoAtualEl) saldoAtualEl.textContent = "R$ 470,45"; // Placeholder
-            if(totalInvestidoEl) totalInvestidoEl.textContent = "R$ 5.000,00"; // Placeholder
+            lancamentos.forEach(lanc => {
+                if (lanc.tipo === 'receita') {
+                    totalReceitas += lanc.valor;
+                } else {
+                    totalDespesas += lanc.valor;
+                    despesasPorCategoria[lanc.categoria] = (despesasPorCategoria[lanc.categoria] || 0) + lanc.valor;
+                }
+            });
 
-            // Configurar botões da página do dashboard
-             const viewAllLancamentosBtn = document.getElementById('view-all-lancamentos');
-            if (viewAllLancamentosBtn) {
-                viewAllLancamentosBtn.addEventListener('click', () => navigateTo('/lancamentos'));
-            }
+            const saldo = totalReceitas - totalDespesas;
 
-            // Inicializar Gráficos (exemplo com Chart.js)
-            // Verifica se Chart está definido antes de chamar initCharts
+            document.getElementById('dashboard-total-receitas').textContent = `R$ ${totalReceitas.toFixed(2)}`;
+            document.getElementById('dashboard-total-despesas').textContent = `R$ ${totalDespesas.toFixed(2)}`;
+            document.getElementById('dashboard-saldo-atual').textContent = `R$ ${saldo.toFixed(2)}`;
+            
+            // Atualiza Gráficos
             if (typeof Chart !== 'undefined') {
-                initCharts();
-            } else {
-                console.error("Chart.js não está definido ANTES de chamar initCharts. Verifique a inclusão da CDN e possíveis conflitos.");
-                 // Pode exibir uma mensagem na UI aqui, se desejar.
-                 const expensesCanvas = document.getElementById('expenses-pie-chart');
-                 if (expensesCanvas && expensesCanvas.parentElement) expensesCanvas.parentElement.innerHTML = '<p class="text-center text-red-500">Erro ao carregar gráfico de despesas.</p>';
-                 const incomeCanvas = document.getElementById('income-expenses-bar-chart');
-                 if (incomeCanvas && incomeCanvas.parentElement) incomeCanvas.parentElement.innerHTML = '<p class="text-center text-red-500">Erro ao carregar gráfico de receitas/despesas.</p>';
+                updateCharts(despesasPorCategoria);
+            }
+
+            // Atualiza Lançamentos Recentes no Dashboard
+            const recentListEl = document.getElementById('recent-lancamentos-list');
+            if(recentListEl){
+                renderLancamentosList(lancamentos.slice(0, 5), recentListEl); // Mostra os 5 mais recentes
             }
         }
 
-        let expensesPieChartInstance = null;
-        let incomeExpensesBarChartInstance = null;
+        function updateCharts(despesasPorCategoria) {
+            const labels = Object.keys(despesasPorCategoria);
+            const data = Object.values(despesasPorCategoria);
 
+            if(expensesPieChartInstance){
+                expensesPieChartInstance.data.labels = labels;
+                expensesPieChartInstance.data.datasets[0].data = data;
+                expensesPieChartInstance.update();
+            }
+
+            // TODO: Atualizar gráfico de barras com dados agregados por mês
+        }
+
+        // --- Lógica da Página de Lançamentos ---
+        function initLancamentosPage() {
+            if (!currentUserId) return;
+            const addBtn = document.getElementById('add-lancamento-btn');
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    showModal('lancamento-modal-template', initLancamentoModal);
+                });
+            }
+            // Inicia ouvindo os lançamentos pessoais
+            listenForLancamentos('pessoal');
+        }
+
+        function listenForLancamentos(filter) {
+            if (!currentUserId) return;
+            if (unsubscribeLancamentos) unsubscribeLancamentos(); // Desliga listener anterior
+
+            const listEl = document.getElementById('lancamentos-list');
+            const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
+            // Por enquanto, o filtro 'grupo' não faz nada diferente.
+            const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy("data", "desc"));
+
+            unsubscribeLancamentos = onSnapshot(q, (snapshot) => {
+                const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderLancamentosList(lancamentos, listEl);
+            }, (error) => {
+                console.error(`Erro ao buscar lançamentos (${filter}):`, error);
+                if (listEl) listEl.innerHTML = `<p class="text-center text-red-500">Erro ao carregar lançamentos. Verifique suas permissões do Firestore.</p>`;
+            });
+        }
+        
+        function renderLancamentosList(lancamentos, containerEl) {
+             const placeholder = document.getElementById('lancamentos-list-placeholder');
+            if (!containerEl) return;
+            
+            containerEl.innerHTML = ''; // Limpa a lista
+            if(lancamentos.length === 0){
+                if (placeholder) placeholder.style.display = 'block';
+                return;
+            }
+            if (placeholder) placeholder.style.display = 'none';
+
+            lancamentos.forEach(lanc => {
+                const isReceita = lanc.tipo === 'receita';
+                const valorCor = isReceita ? 'text-green-500' : 'text-red-500';
+                const dataFormatada = lanc.data ? new Date(lanc.data.seconds * 1000).toLocaleDateString('pt-BR') : 'Data inválida';
+
+                const itemHTML = `
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between space-x-4">
+                        <div class="flex items-center space-x-4">
+                            <span class="p-3 rounded-full ${isReceita ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}">
+                                <svg class="${isReceita ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'} w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                     ${isReceita ? '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />' : '<path stroke-linecap="round" stroke-linejoin="round" d="M18 12H6" />'}
+                                </svg>
+                            </span>
+                            <div>
+                                <p class="font-bold text-gray-800 dark:text-gray-100">${lanc.descricao}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">${lanc.categoria} &bull; ${dataFormatada}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                           <p class="font-bold text-lg ${valorCor}">
+                                ${isReceita ? '+' : '-'} R$ ${lanc.valor.toFixed(2)}
+                           </p>
+                           <!-- Botões de ação (editar/excluir) podem ser adicionados aqui -->
+                        </div>
+                    </div>
+                `;
+                containerEl.innerHTML += itemHTML;
+            });
+        }
+
+
+        function initLancamentoModal(data = {}) {
+            const form = document.getElementById('lancamento-form');
+            const title = document.getElementById('lancamento-modal-title');
+            const idInput = document.getElementById('lancamento-id');
+            const valorInput = document.getElementById('lancamento-valor');
+            const descricaoInput = document.getElementById('lancamento-descricao');
+            const categoriaInput = document.getElementById('lancamento-categoria');
+            const dataInput = document.getElementById('lancamento-data');
+            const receitaRadio = document.getElementById('tipo-receita');
+            const despesaRadio = document.getElementById('tipo-despesa');
+            
+            // Lógica para alternar estilo dos botões de tipo
+            const tipoLabels = document.querySelectorAll('input[name="tipo-lancamento"] + span');
+            function updateTipoStyle() {
+                tipoLabels.forEach(label => {
+                    const radio = document.getElementById(label.parentElement.htmlFor);
+                    if (radio.checked) {
+                        label.classList.add('bg-white', 'dark:bg-gray-900', 'text-primary-DEFAULT');
+                        label.classList.remove('text-gray-600', 'dark:text-gray-300');
+                    } else {
+                        label.classList.remove('bg-white', 'dark:bg-gray-900', 'text-primary-DEFAULT');
+                        label.classList.add('text-gray-600', 'dark:text-gray-300');
+                    }
+                });
+            }
+            receitaRadio.addEventListener('change', updateTipoStyle);
+            despesaRadio.addEventListener('change', updateTipoStyle);
+            updateTipoStyle(); // Estado inicial
+            
+            // Preenche o formulário se for edição
+            if (data.id) {
+                title.textContent = "Editar Lançamento";
+                idInput.value = data.id;
+                valorInput.value = data.valor;
+                descricaoInput.value = data.descricao;
+                categoriaInput.value = data.categoria;
+                dataInput.value = new Date(data.data.seconds * 1000).toISOString().split('T')[0];
+                if (data.tipo === 'receita') receitaRadio.checked = true;
+                else despesaRadio.checked = true;
+                updateTipoStyle();
+            } else {
+                // Define a data atual para novos lançamentos
+                dataInput.value = new Date().toISOString().split('T')[0];
+            }
+
+            document.getElementById('close-lancamento-modal').addEventListener('click', closeModal);
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                if(!currentUserId) return;
+
+                const lancamentoData = {
+                    valor: parseFloat(valorInput.value),
+                    descricao: descricaoInput.value,
+                    categoria: categoriaInput.value,
+                    data: Timestamp.fromDate(new Date(dataInput.value + 'T00:00:00')), // Adiciona T00:00:00 para evitar problemas de fuso horário
+                    tipo: receitaRadio.checked ? 'receita' : 'despesa',
+                    userId: currentUserId,
+                    appId: appIdForFirestorePaths
+                };
+
+                const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
+
+                try {
+                    if (idInput.value) { // Atualizar existente
+                        const docRef = doc(db, lancamentosPath, idInput.value);
+                        await updateDoc(docRef, lancamentoData);
+                        console.log("Lançamento atualizado com ID: ", idInput.value);
+                    } else { // Criar novo
+                        lancamentoData.createdAt = serverTimestamp();
+                        const docRef = await addDoc(collection(db, lancamentosPath), lancamentoData);
+                        console.log("Lançamento salvo com ID: ", docRef.id);
+                    }
+                    closeModal();
+                } catch(error) {
+                    console.error("Erro ao salvar lançamento: ", error);
+                    alert("Erro ao salvar. Verifique o console para mais detalhes.");
+                }
+            };
+        }
+
+
+        // --- Funções Auxiliares de UI ---
         function initCharts() {
-             if (typeof Chart === 'undefined') { // Verificação extra
-                console.error("Chart.js ainda não definido DENTRO de initCharts. Isso não deveria acontecer se a verificação anterior passou.");
+            if (typeof Chart === 'undefined') {
+                console.error("Chart.js não definido ao tentar inicializar gráficos.");
                 return;
             }
             console.log("Chart object available in initCharts:", typeof Chart);
-
+        
             const isDarkMode = document.documentElement.classList.contains('dark');
-            const textColor = isDarkMode ? '#CBD5E1' : '#4A5568'; // slate-300 para dark, gray-600 para light
+            const textColor = isDarkMode ? '#CBD5E1' : '#4A5568';
             const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-
-            // Gráfico de Pizza (Despesas)
+        
             const expensesCtx = document.getElementById('expenses-pie-chart')?.getContext('2d');
             if (expensesCtx) {
-                if(expensesPieChartInstance) expensesPieChartInstance.destroy(); // Destruir gráfico anterior se existir
+                if (expensesPieChartInstance) expensesPieChartInstance.destroy();
                 expensesPieChartInstance = new Chart(expensesCtx, {
-                    type: 'doughnut', // 'pie' ou 'doughnut'
-                    data: {
-                        labels: ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Outros'],
-                        datasets: [{
-                            label: 'Despesas por Categoria',
-                            data: [300, 150, 100, 400, 50], // Dados de exemplo
-                            backgroundColor: [
-                                'rgba(239, 68, 68, 0.7)',  // red-500
-                                'rgba(59, 130, 246, 0.7)', // blue-500
-                                'rgba(245, 158, 11, 0.7)', // amber-500
-                                'rgba(16, 185, 129, 0.7)',// emerald-500
-                                'rgba(139, 92, 246, 0.7)', // violet-500
-                            ],
-                            borderColor: isDarkMode ? '#1F2937' : '#FFFFFF', // secondary (gray-800) para dark, white para light
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: textColor,
-                                    padding: 20,
-                                    font: { size: 14 }
-                                }
-                            },
-                            tooltip: {
-                                bodyFont: { size: 14 },
-                                titleFont: { size: 16, weight: 'bold'}
-                            }
-                        }
-                    }
+                    type: 'doughnut',
+                    data: { labels: [], datasets: [{ data: [], backgroundColor: ['rgba(239, 68, 68, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(16, 185, 129, 0.7)', 'rgba(139, 92, 246, 0.7)'], borderColor: isDarkMode ? '#1F2937' : '#FFFFFF', borderWidth: 2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 20, font: { size: 14 } } }, tooltip: { bodyFont: { size: 14 }, titleFont: { size: 16, weight: 'bold' } } } }
                 });
-            } else {
-                console.warn("Elemento canvas 'expenses-pie-chart' não encontrado para o gráfico de despesas.");
             }
-
-            // Gráfico de Barras (Receitas vs Despesas)
+        
             const incomeExpensesCtx = document.getElementById('income-expenses-bar-chart')?.getContext('2d');
             if (incomeExpensesCtx) {
-                 if(incomeExpensesBarChartInstance) incomeExpensesBarChartInstance.destroy();
+                if (incomeExpensesBarChartInstance) incomeExpensesBarChartInstance.destroy();
                 incomeExpensesBarChartInstance = new Chart(incomeExpensesCtx, {
                     type: 'bar',
-                    data: {
-                        labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'], // Últimos 6 meses
-                        datasets: [{
-                            label: 'Receitas',
-                            data: [1200, 1300, 1100, 1400, 1500, 1350], // Dados de exemplo
-                            backgroundColor: 'rgba(16, 185, 129, 0.7)', // emerald-500
-                            borderColor: 'rgba(16, 185, 129, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }, {
-                            label: 'Despesas',
-                            data: [800, 850, 700, 900, 950, 880], // Dados de exemplo
-                            backgroundColor: 'rgba(239, 68, 68, 0.7)', // red-500
-                            borderColor: 'rgba(239, 68, 68, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: { color: textColor, font: {size: 12} },
-                                grid: { color: gridColor }
-                            },
-                            x: {
-                                ticks: { color: textColor, font: {size: 12} },
-                                grid: { display: false }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                                labels: { color: textColor, font: {size: 14} }
-                            },
-                             tooltip: {
-                                bodyFont: { size: 14 },
-                                titleFont: { size: 16, weight: 'bold'}
-                            }
-                        }
-                    }
+                    data: { labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'], datasets: [{ label: 'Receitas', data: [], backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 4 }, { label: 'Despesas', data: [], backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: textColor, font: { size: 12 } }, grid: { color: gridColor } }, x: { ticks: { color: textColor, font: { size: 12 } }, grid: { display: false } } }, plugins: { legend: { position: 'top', labels: { color: textColor, font: { size: 14 } } }, tooltip: { bodyFont: { size: 14 }, titleFont: { size: 16, weight: 'bold' } } } }
                 });
-            } else {
-                 console.warn("Elemento canvas 'income-expenses-bar-chart' não encontrado para o gráfico de receitas/despesas.");
             }
         }
-
-
-        // --- Navbar Dinâmica e Tema ---
+        
         function updateNavbarUI(user) {
             const loggedInTemplate = document.getElementById('navbar-template-logged-in');
             const loggedOutTemplate = document.getElementById('navbar-template-logged-out');
@@ -1070,7 +1252,6 @@
                         if (userAvatar) userAvatar.src = user.photoURL;
                         if (userAvatarMobile) userAvatarMobile.src = user.photoURL;
                     } else {
-                        // Se não tiver foto, usar placeholder padrão (já está no HTML, mas podemos garantir)
                          const placeholderAvatar = "https://placehold.co/100x100/E2E8F0/A0AEC0?text=" + (user.displayName ? user.displayName.charAt(0).toUpperCase() : "U");
                          if (userAvatar) userAvatar.src = placeholderAvatar;
                          if (userAvatarMobile) userAvatarMobile.src = placeholderAvatar;
