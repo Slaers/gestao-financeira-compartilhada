@@ -623,7 +623,7 @@
         // --- Variáveis Globais de Estado ---
         let currentUser = null; // Armazena o objeto do usuário logado
         let currentUserId = null; // Armazena o UID do usuário logado
-        let unsubscribeLancamentos = null; // Para desligar o listener do Firestore ao sair da página
+        let unsubscribeListeners = []; // Array para guardar todas as funções de unsubscribe
 
         // --- Constantes e Helpers ---
         const APP_NAME = "FinançasApp";
@@ -683,17 +683,18 @@
         const protectedDefaultRoute = '/';
         const page404 = { templateId: '404-template', init: () => {} };
 
+        function cleanupPageListeners() {
+            unsubscribeListeners.forEach(unsubscribe => unsubscribe());
+            unsubscribeListeners = [];
+            console.log("Listeners de página desligados.");
+        }
+
         async function navigateTo(path) {
             window.location.hash = path;
         }
 
         async function router() {
-            // Desligar listeners antigos antes de mudar de página
-            if (unsubscribeLancamentos) {
-                unsubscribeLancamentos();
-                unsubscribeLancamentos = null;
-                console.log("Listener de Lançamentos desligado.");
-            }
+            cleanupPageListeners();
 
             initialLoader.style.display = 'flex'; // Mostrar loader
             appRoot.innerHTML = ''; // Limpar conteúdo anterior
@@ -958,7 +959,6 @@
         // --- Lógica do Dashboard ---
         async function initDashboardPage() {
             if (!currentUserId) {
-                console.warn("Usuário não logado, não pode inicializar dashboard. Redirecionando para login.");
                 navigateTo('/login');
                 return;
             }
@@ -972,13 +972,13 @@
                     const userData = docSnap.data();
                     if (userNameEl) userNameEl.textContent = userData.name || currentUser.displayName || 'Usuário';
                 } else {
-                     if (userNameEl) userNameEl.textContent = currentUser.displayName || 'Usuário'; // Fallback para o nome do Auth
+                     if (userNameEl) userNameEl.textContent = currentUser.displayName || 'Usuário'; // Fallback
                 }
             } catch (error) {
                  if (userNameEl) userNameEl.textContent = (currentUser.displayName || 'Usuário') + " (Erro)";
             }
             
-            // Ouvir lançamentos para atualizar o dashboard
+            // Inicia o listener de lançamentos para o dashboard
             listenForLancamentosDashboard();
         }
 
@@ -986,9 +986,10 @@
             if (!currentUserId) return;
 
             const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
-            const q = query(collection(db, lancamentosPath), orderBy('data', 'desc'));
+            // *** CORREÇÃO: Adicionado 'where' para filtrar pelo usuário atual ***
+            const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy('data', 'desc'));
             
-            unsubscribeLancamentos = onSnapshot(q, (snapshot) => {
+            const unsubscribe = onSnapshot(q, (snapshot) => {
                 const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 updateDashboardUI(lancamentos);
             }, (error) => {
@@ -997,6 +998,7 @@
                     console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE NO DASHBOARD!!!! Verifique suas Regras de Segurança para o caminho:", lancamentosPath);
                 }
             });
+            unsubscribeListeners.push(unsubscribe); // Armazena a função para desligar o listener
         }
 
         function updateDashboardUI(lancamentos) {
@@ -1019,15 +1021,13 @@
             document.getElementById('dashboard-total-despesas').textContent = `R$ ${totalDespesas.toFixed(2)}`;
             document.getElementById('dashboard-saldo-atual').textContent = `R$ ${saldo.toFixed(2)}`;
             
-            // Atualiza Gráficos
             if (typeof Chart !== 'undefined') {
                 updateCharts(despesasPorCategoria);
             }
 
-            // Atualiza Lançamentos Recentes no Dashboard
             const recentListEl = document.getElementById('recent-lancamentos-list');
             if(recentListEl){
-                renderLancamentosList(lancamentos.slice(0, 5), recentListEl); // Mostra os 5 mais recentes
+                renderLancamentosList(lancamentos.slice(0, 5), recentListEl);
             }
         }
 
@@ -1040,8 +1040,6 @@
                 expensesPieChartInstance.data.datasets[0].data = data;
                 expensesPieChartInstance.update();
             }
-
-            // TODO: Atualizar gráfico de barras com dados agregados por mês
         }
 
         // --- Lógica da Página de Lançamentos ---
@@ -1053,26 +1051,24 @@
                     showModal('lancamento-modal-template', initLancamentoModal);
                 });
             }
-            // Inicia ouvindo os lançamentos pessoais
             listenForLancamentos('pessoal');
         }
 
         function listenForLancamentos(filter) {
             if (!currentUserId) return;
-            if (unsubscribeLancamentos) unsubscribeLancamentos(); // Desliga listener anterior
-
+            
             const listEl = document.getElementById('lancamentos-list');
             const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
-            // Por enquanto, o filtro 'grupo' não faz nada diferente.
             const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy("data", "desc"));
 
-            unsubscribeLancamentos = onSnapshot(q, (snapshot) => {
+            const unsubscribe = onSnapshot(q, (snapshot) => {
                 const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderLancamentosList(lancamentos, listEl);
             }, (error) => {
                 console.error(`Erro ao buscar lançamentos (${filter}):`, error);
-                if (listEl) listEl.innerHTML = `<p class="text-center text-red-500">Erro ao carregar lançamentos. Verifique suas permissões do Firestore.</p>`;
+                if (listEl) listEl.innerHTML = `<p class="text-center text-red-500 py-16">Erro ao carregar lançamentos. Verifique suas permissões do Firestore.</p>`;
             });
+            unsubscribeListeners.push(unsubscribe); // Armazena a função para desligar o listener
         }
         
         function renderLancamentosList(lancamentos, containerEl) {
@@ -1082,6 +1078,7 @@
             containerEl.innerHTML = ''; // Limpa a lista
             if(lancamentos.length === 0){
                 if (placeholder) placeholder.style.display = 'block';
+                 containerEl.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400 py-16">Nenhum lançamento encontrado.<br>Clique no botão '+' para adicionar um.</p>`;
                 return;
             }
             if (placeholder) placeholder.style.display = 'none';
@@ -1108,7 +1105,6 @@
                            <p class="font-bold text-lg ${valorCor}">
                                 ${isReceita ? '+' : '-'} R$ ${lanc.valor.toFixed(2)}
                            </p>
-                           <!-- Botões de ação (editar/excluir) podem ser adicionados aqui -->
                         </div>
                     </div>
                 `;
@@ -1128,7 +1124,6 @@
             const receitaRadio = document.getElementById('tipo-receita');
             const despesaRadio = document.getElementById('tipo-despesa');
             
-            // Lógica para alternar estilo dos botões de tipo
             const tipoLabels = document.querySelectorAll('input[name="tipo-lancamento"] + span');
             function updateTipoStyle() {
                 tipoLabels.forEach(label => {
@@ -1144,9 +1139,8 @@
             }
             receitaRadio.addEventListener('change', updateTipoStyle);
             despesaRadio.addEventListener('change', updateTipoStyle);
-            updateTipoStyle(); // Estado inicial
+            updateTipoStyle();
             
-            // Preenche o formulário se for edição
             if (data.id) {
                 title.textContent = "Editar Lançamento";
                 idInput.value = data.id;
@@ -1158,7 +1152,6 @@
                 else despesaRadio.checked = true;
                 updateTipoStyle();
             } else {
-                // Define a data atual para novos lançamentos
                 dataInput.value = new Date().toISOString().split('T')[0];
             }
 
@@ -1171,7 +1164,7 @@
                     valor: parseFloat(valorInput.value),
                     descricao: descricaoInput.value,
                     categoria: categoriaInput.value,
-                    data: Timestamp.fromDate(new Date(dataInput.value + 'T00:00:00')), // Adiciona T00:00:00 para evitar problemas de fuso horário
+                    data: Timestamp.fromDate(new Date(dataInput.value + 'T00:00:00')),
                     tipo: receitaRadio.checked ? 'receita' : 'despesa',
                     userId: currentUserId,
                     appId: appIdForFirestorePaths
@@ -1180,11 +1173,11 @@
                 const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
 
                 try {
-                    if (idInput.value) { // Atualizar existente
+                    if (idInput.value) {
                         const docRef = doc(db, lancamentosPath, idInput.value);
                         await updateDoc(docRef, lancamentoData);
                         console.log("Lançamento atualizado com ID: ", idInput.value);
-                    } else { // Criar novo
+                    } else {
                         lancamentoData.createdAt = serverTimestamp();
                         const docRef = await addDoc(collection(db, lancamentosPath), lancamentoData);
                         console.log("Lançamento salvo com ID: ", docRef.id);
@@ -1200,11 +1193,7 @@
 
         // --- Funções Auxiliares de UI ---
         function initCharts() {
-            if (typeof Chart === 'undefined') {
-                console.error("Chart.js não definido ao tentar inicializar gráficos.");
-                return;
-            }
-            console.log("Chart object available in initCharts:", typeof Chart);
+            if (typeof Chart === 'undefined') { return; }
         
             const isDarkMode = document.documentElement.classList.contains('dark');
             const textColor = isDarkMode ? '#CBD5E1' : '#4A5568';
