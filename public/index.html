@@ -986,8 +986,8 @@
             if (!currentUserId) return;
 
             const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
-            // *** CORREÇÃO: Adicionado 'where' para filtrar pelo usuário atual ***
-            const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy('data', 'desc'));
+            // *** CORREÇÃO: Adicionado 'where' para filtrar pelo usuário atual e limit(5) para pegar os mais recentes ***
+            const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy('data', 'desc'), limit(5));
             
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1027,7 +1027,7 @@
 
             const recentListEl = document.getElementById('recent-lancamentos-list');
             if(recentListEl){
-                renderLancamentosList(lancamentos.slice(0, 5), recentListEl);
+                renderLancamentosList(lancamentos, recentListEl); // A consulta já limita a 5, então não precisa de slice
             }
         }
 
