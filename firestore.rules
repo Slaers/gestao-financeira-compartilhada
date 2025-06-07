@@ -1,18 +1,27 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Regra para a coleção de perfis de usuário (continua a mesma)
-    match /artifacts/{appId}/users/{userId}/profile/{profileDocId} {
-      allow read, write: if request.auth.uid == userId;
+    // Default deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // Regra para a NOVA coleção de lançamentos
-    // Protege a coleção principal 'lancamentos'
+    // Allow users to read and write their own profile information
+    // Path: artifacts/{appId}/users/{userId}/profile/{userId}
+    // Assuming this structure based on JavaScript: `artifacts/${appIdForFirestorePaths}/users/${user.uid}/profile/${user.uid}`
+    match /artifacts/{appId}/users/{uid}/profile/{profileId} {
+      allow read: if request.auth.uid != null && request.auth.uid == uid && uid == profileId;
+      allow write: if request.auth.uid != null && request.auth.uid == uid && uid == profileId;
+    }
+    
+    // Rules for 'lancamentos' collection
     match /lancamentos/{lancamentoId} {
-      // Permite ler ou escrever em um documento de lançamento
-      // SE o 'userId' dentro do documento for o mesmo do usuário logado.
-      allow read, write: if request.auth.uid == resource.data.userId;
+      allow read: if request.auth.uid != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth.uid != null && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth.uid != null && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId; // Ensures userId is not changed
+      allow delete: if request.auth.uid != null && resource.data.userId == request.auth.uid;
     }
   }
 }

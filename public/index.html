@@ -1184,8 +1184,8 @@
                     }
                     closeModal();
                 } catch(error) {
-                    console.error("Erro ao salvar lançamento: ", error);
-                    alert("Erro ao salvar. Verifique o console para mais detalhes.");
+                    console.error("Detailed error saving lancamento: ", error);
+                    alert("Erro ao salvar. Verifique o console para mais detalhes. Código: " + error.code);
                 }
             };
         }
