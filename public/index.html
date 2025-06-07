@@ -985,9 +985,8 @@
         function listenForLancamentosDashboard() {
             if (!currentUserId) return;
 
-            const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
-            // *** CORREÇÃO: Adicionado 'where' para filtrar pelo usuário atual e limit(5) para pegar os mais recentes ***
-            const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy('data', 'desc'), limit(5));
+            // *** MUDANÇA: Usando a coleção principal 'lancamentos' ***
+            const q = query(collection(db, 'lancamentos'), where("userId", "==", currentUserId), orderBy('data', 'desc'), limit(5));
             
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -995,7 +994,7 @@
             }, (error) => {
                 console.error("Erro ao ouvir lançamentos para o dashboard:", error);
                  if (error.code === 'permission-denied') {
-                    console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE NO DASHBOARD!!!! Verifique suas Regras de Segurança para o caminho:", lancamentosPath);
+                    console.error("!!!! ERRO DE PERMISSÃO DO FIRESTORE NO DASHBOARD!!!! Verifique suas Regras de Segurança para a coleção 'lancamentos'.");
                 }
             });
             unsubscribeListeners.push(unsubscribe); // Armazena a função para desligar o listener
@@ -1058,8 +1057,8 @@
             if (!currentUserId) return;
             
             const listEl = document.getElementById('lancamentos-list');
-            const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
-            const q = query(collection(db, lancamentosPath), where("userId", "==", currentUserId), orderBy("data", "desc"));
+            // *** MUDANÇA: Usando a coleção principal 'lancamentos' ***
+            const q = query(collection(db, "lancamentos"), where("userId", "==", currentUserId), orderBy("data", "desc"));
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1167,19 +1166,20 @@
                     data: Timestamp.fromDate(new Date(dataInput.value + 'T00:00:00')),
                     tipo: receitaRadio.checked ? 'receita' : 'despesa',
                     userId: currentUserId,
-                    appId: appIdForFirestorePaths
+                    // appId não é mais necessário aqui com a nova estrutura
                 };
 
-                const lancamentosPath = `artifacts/${appIdForFirestorePaths}/users/${currentUserId}/lancamentos`;
+                // *** MUDANÇA: Usando a coleção principal 'lancamentos' ***
+                const lancamentosCollectionRef = collection(db, 'lancamentos');
 
                 try {
-                    if (idInput.value) {
-                        const docRef = doc(db, lancamentosPath, idInput.value);
+                    if (idInput.value) { // Atualizar existente
+                        const docRef = doc(lancamentosCollectionRef, idInput.value);
                         await updateDoc(docRef, lancamentoData);
                         console.log("Lançamento atualizado com ID: ", idInput.value);
-                    } else {
+                    } else { // Criar novo
                         lancamentoData.createdAt = serverTimestamp();
-                        const docRef = await addDoc(collection(db, lancamentosPath), lancamentoData);
+                        const docRef = await addDoc(lancamentosCollectionRef, lancamentoData);
                         console.log("Lançamento salvo com ID: ", docRef.id);
                     }
                     closeModal();
