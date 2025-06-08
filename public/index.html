@@ -403,6 +403,27 @@
                 </div>
             </div>
 
+            <!-- Filtro de Mês -->
+            <div class="mb-4 flex items-center space-x-2">
+                <label for="month-filter-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">Filtrar por Mês:</label>
+                <select id="month-filter-select" name="month-filter" class="block w-full max-w-xs pl-3 pr-10 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-primary-DEFAULT focus:border-primary-DEFAULT sm:text-sm">
+                    <option value="all">Todos os Meses</option> 
+                    <!-- Outras opções de meses serão populadas por JavaScript -->
+                </select>
+            </div>
+
+            <!-- Gráficos para a Página de Lançamentos -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-6">
+                <div class="bg-white dark:bg-secondary p-6 rounded-xl shadow-xl">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Despesas por Categoria (Mês Selecionado)</h3>
+                    <div class="h-80"><canvas id="lancamentos-expenses-pie-chart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-secondary p-6 rounded-xl shadow-xl">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Receitas vs Despesas (Mês Selecionado)</h3>
+                     <div class="h-80"><canvas id="lancamentos-income-expenses-bar-chart"></canvas></div>
+                </div>
+            </section>
+
             <div id="lancamentos-list" class="space-y-4">
                 <!-- A lista de lançamentos será injetada aqui pelo JavaScript -->
                  <p id="lancamentos-list-placeholder" class="text-center text-gray-500 dark:text-gray-400 py-16">
@@ -624,6 +645,11 @@
         let currentUser = null; // Armazena o objeto do usuário logado
         let currentUserId = null; // Armazena o UID do usuário logado
         let unsubscribeListeners = []; // Array para guardar todas as funções de unsubscribe
+        let expensesPieChartInstance = null; // Dashboard
+        let incomeExpensesBarChartInstance = null; // Dashboard
+        let lancamentosExpensesPieChartInstance = null; // Lancamentos Page
+        let lancamentosIncomeExpensesBarChartInstance = null; // Lancamentos Page
+
 
         // --- Constantes e Helpers ---
         const APP_NAME = "FinançasApp";
@@ -1021,53 +1047,314 @@
             document.getElementById('dashboard-saldo-atual').textContent = `R$ ${saldo.toFixed(2)}`;
             
             if (typeof Chart !== 'undefined') {
-                updateCharts(despesasPorCategoria);
+                // This function is for the dashboard, ensure it targets dashboard instances
+                updateDashboardCharts(despesasPorCategoria, totalReceitas, totalDespesas);
             }
 
             const recentListEl = document.getElementById('recent-lancamentos-list');
             if(recentListEl){
-                renderLancamentosList(lancamentos, recentListEl); // A consulta já limita a 5, então não precisa de slice
+                renderLancamentosList(lancamentos, recentListEl); 
             }
         }
 
-        function updateCharts(despesasPorCategoria) {
+        function updateDashboardCharts(despesasPorCategoria, totalReceitas, totalDespesas) {
+            // Specific to Dashboard Pie Chart
+            if(expensesPieChartInstance) {
+                expensesPieChartInstance.data.labels = Object.keys(despesasPorCategoria);
+                expensesPieChartInstance.data.datasets[0].data = Object.values(despesasPorCategoria);
+                expensesPieChartInstance.update();
+            }
+
+            // Specific to Dashboard Bar Chart (if it were to show monthly summary, it would need different data)
+            // For now, the dashboard bar chart is static or updated elsewhere.
+            // If it's meant to show current month's income vs expense like the lancamentos page,
+            // it would need totalReceitas and totalDespesas for the current month.
+            // Example if dashboard bar chart needs to be updated with current month totals:
+            /*
+            if(incomeExpensesBarChartInstance) {
+                const currentMonthLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                incomeExpensesBarChartInstance.data.labels = [currentMonthLabel];
+                incomeExpensesBarChartInstance.data.datasets[0].data = [totalReceitas];
+                incomeExpensesBarChartInstance.data.datasets[1].data = [totalDespesas];
+                incomeExpensesBarChartInstance.update();
+            }
+            */
+        }
+
+        function updateCharts(despesasPorCategoria) { // This seems to be a duplicate or old name
             const labels = Object.keys(despesasPorCategoria);
             const data = Object.values(despesasPorCategoria);
 
-            if(expensesPieChartInstance){
+            if(expensesPieChartInstance){ // Assumes this is for dashboard
                 expensesPieChartInstance.data.labels = labels;
                 expensesPieChartInstance.data.datasets[0].data = data;
                 expensesPieChartInstance.update();
             }
         }
 
+
         // --- Lógica da Página de Lançamentos ---
-        function initLancamentosPage() {
-            if (!currentUserId) return;
+        async function initLancamentosPage() {
+            if (!currentUserId) {
+                navigateTo('/login');
+                return;
+            }
+
+            initLancamentosCharts(); // Initialize charts for the Lancamentos page
+
             const addBtn = document.getElementById('add-lancamento-btn');
             if (addBtn) {
                 addBtn.addEventListener('click', () => {
                     showModal('lancamento-modal-template', initLancamentoModal);
                 });
             }
-            listenForLancamentos('pessoal');
+
+            const monthFilterSelect = document.getElementById('month-filter-select');
+
+            // 1. Fetch all lancamentos for the user ONCE to populate the filter
+            // Using a separate query with getDocs for one-time fetch
+            const allUserLancamentosQuery = query(
+                collection(db, "lancamentos"), 
+                where("userId", "==", currentUserId), 
+                orderBy("data", "desc")
+            );
+            try {
+                const querySnapshot = await getDocs(allUserLancamentosQuery);
+                const allLancamentos = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                populateMonthFilter(allLancamentos, monthFilterSelect);
+            } catch (error) {
+                console.error("Erro ao buscar todos os lançamentos para o filtro de mês:", error);
+                populateMonthFilter([], monthFilterSelect); // Popula com default em caso de erro
+            }
+            
+            // 2. Add event listener to the month filter
+            if (monthFilterSelect) {
+                monthFilterSelect.addEventListener('change', () => {
+                    const selectedMonth = monthFilterSelect.value;
+                    // O 'pessoal' é mantido por enquanto, pode ser um tipo de filtro diferente
+                    listenForLancamentos('pessoal', selectedMonth); 
+                });
+            }
+
+            // 3. Initial call to listenForLancamentos
+            const initialMonthToLoad = monthFilterSelect ? monthFilterSelect.value : "all";
+            listenForLancamentos('pessoal', initialMonthToLoad);
+
+
+            // Adicionar event listener para botões de editar e remover (event delegation)
+            const lancamentosListEl = document.getElementById('lancamentos-list');
+            if (lancamentosListEl) {
+                lancamentosListEl.addEventListener('click', async (event) => {
+                    const editButton = event.target.closest('.edit-lancamento-btn');
+                    const removeButton = event.target.closest('.remove-lancamento-btn');
+
+                    if (editButton) {
+                        const lancamentoId = editButton.dataset.id;
+                        if (!lancamentoId) {
+                            console.error("ID do lançamento não encontrado no botão de editar.");
+                            return;
+                        }
+                        
+                        console.log(`Tentando editar lançamento com ID: ${lancamentoId}`);
+                        const docRef = doc(db, 'lancamentos', lancamentoId);
+                        try {
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                const lancamentoData = docSnap.data();
+                                console.log("Dados do lançamento para edição:", lancamentoData);
+                                showModal('lancamento-modal-template', initLancamentoModal, { id: lancamentoId, ...lancamentoData });
+                            } else {
+                                console.error("Nenhum documento encontrado para editar com ID:", lancamentoId);
+                                alert("Erro: Lançamento não encontrado para edição.");
+                            }
+                        } catch (error) {
+                            console.error("Erro ao buscar lançamento para edição:", error);
+                            alert("Erro ao carregar dados do lançamento para edição.");
+                        }
+                    } else if (removeButton) {
+                        const lancamentoId = removeButton.dataset.id;
+                        if (!lancamentoId) {
+                            console.error("ID do lançamento não encontrado no botão de remover.");
+                            return;
+                        }
+                        await handleDeleteLancamento(lancamentoId);
+                    }
+                });
+            }
         }
 
-        function listenForLancamentos(filter) {
+        function formatMonthYear(dateString) { // dateString in "YYYY-MM"
+            const [year, monthNum] = dateString.split('-');
+            const date = new Date(year, monthNum - 1);
+            return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        }
+
+        function populateMonthFilter(lancamentos, selectElement) {
+            if (!selectElement) return;
+
+            const uniqueMonths = new Set();
+            lancamentos.forEach(lanc => {
+                if (lanc.data && lanc.data.seconds) {
+                    const date = new Date(lanc.data.seconds * 1000);
+                    const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    uniqueMonths.add(monthYear);
+                }
+            });
+
+            const sortedMonths = Array.from(uniqueMonths).sort((a, b) => b.localeCompare(a)); // Descending
+
+            selectElement.innerHTML = ''; // Clear existing options
+
+            const allMonthsOption = document.createElement('option');
+            allMonthsOption.value = "all";
+            allMonthsOption.textContent = "Todos os Meses";
+            selectElement.appendChild(allMonthsOption);
+
+            sortedMonths.forEach(monthYear => {
+                const option = document.createElement('option');
+                option.value = monthYear;
+                option.textContent = formatMonthYear(monthYear);
+                selectElement.appendChild(option);
+            });
+        }
+
+        async function handleDeleteLancamento(lancamentoId) {
+            if (!currentUserId || !lancamentoId) {
+                console.error("Usuário não logado ou ID do lançamento não fornecido para remoção.");
+                return;
+            }
+
+            const confirmDelete = confirm("Tem certeza que deseja remover este lançamento?");
+            if (confirmDelete) {
+                try {
+                    const docRef = doc(db, 'lancamentos', lancamentoId);
+                    await deleteDoc(docRef);
+                    console.log("Lançamento removido com sucesso, ID:", lancamentoId);
+                } catch (error) {
+                    console.error("Erro ao remover lançamento:", error);
+                    alert("Erro ao remover lançamento. Tente novamente.");
+                }
+            }
+        }
+
+        function listenForLancamentos(filterType, selectedMonth = "all") {
             if (!currentUserId) return;
             
             const listEl = document.getElementById('lancamentos-list');
-            // *** MUDANÇA: Usando a coleção principal 'lancamentos' ***
-            const q = query(collection(db, "lancamentos"), where("userId", "==", currentUserId), orderBy("data", "desc"));
+            if (!listEl) {
+                console.error("Elemento da lista de lançamentos não encontrado.");
+                return;
+            }
+
+            let q;
+            if (selectedMonth && selectedMonth !== "all") {
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const startDate = new Date(year, month - 1, 1);
+                const endDate = new Date(year, month, 1); // Primeiro dia do próximo mês
+
+                q = query(collection(db, "lancamentos"),
+                          where("userId", "==", currentUserId),
+                          where("data", ">=", Timestamp.fromDate(startDate)),
+                          where("data", "<", Timestamp.fromDate(endDate)),
+                          orderBy("data", "desc"));
+            } else {
+                // Query padrão para buscar todos os lançamentos do usuário
+                q = query(collection(db, "lancamentos"), 
+                          where("userId", "==", currentUserId), 
+                          orderBy("data", "desc"));
+            }
+
+            // Limpar listeners antigos antes de adicionar um novo para evitar duplicação
+            // Isso é importante se listenForLancamentos puder ser chamado múltiplas vezes com diferentes filtros
+            const currentUnsubscribe = unsubscribeListeners.find(item => item.id === 'lancamentosListener');
+            if (currentUnsubscribe && typeof currentUnsubscribe.func === 'function') {
+                currentUnsubscribe.func(); // Chamar a função de unsubscribe
+                unsubscribeListeners = unsubscribeListeners.filter(item => item.id !== 'lancamentosListener'); // Remover da lista
+                 console.log("Listener de lançamentos anterior desligado.");
+            }
+
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                const lancamentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const lancamentos = snapshot.docs.map(docData => ({ id: docData.id, ...docData.data() }));
                 renderLancamentosList(lancamentos, listEl);
+                updateLancamentosCharts(lancamentos, selectedMonth); // Atualiza os gráficos com os dados filtrados
             }, (error) => {
-                console.error(`Erro ao buscar lançamentos (${filter}):`, error);
-                if (listEl) listEl.innerHTML = `<p class="text-center text-red-500 py-16">Erro ao carregar lançamentos. Verifique suas permissões do Firestore.</p>`;
+                console.error(`Erro ao buscar lançamentos (${filterType}, Mês: ${selectedMonth}):`, error);
+                if (listEl) listEl.innerHTML = `<p class="text-center text-red-500 py-16">Erro ao carregar lançamentos. Verifique o console.</p>`;
             });
-            unsubscribeListeners.push(unsubscribe); // Armazena a função para desligar o listener
+            unsubscribeListeners.push({id: 'lancamentosListener', func: unsubscribe}); 
+            console.log("Novo listener de lançamentos ativado para o mês:", selectedMonth);
+        }
+
+        function initLancamentosCharts() {
+            if (typeof Chart === 'undefined') { 
+                console.warn("Chart.js não carregado, pulando inicialização dos gráficos de lançamentos.");
+                return; 
+            }
+        
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            const textColor = isDarkMode ? '#CBD5E1' : '#4A5568'; // slate-300 para dark, gray-700 para light
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+            // Pie Chart for Lancamentos Expenses
+            const pieCtx = document.getElementById('lancamentos-expenses-pie-chart')?.getContext('2d');
+            if (pieCtx) {
+                if (lancamentosExpensesPieChartInstance) lancamentosExpensesPieChartInstance.destroy();
+                lancamentosExpensesPieChartInstance = new Chart(pieCtx, {
+                    type: 'doughnut',
+                    data: { labels: [], datasets: [{ data: [], backgroundColor: ['rgba(239, 68, 68, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(234, 179, 8, 0.7)', 'rgba(34, 197, 94, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(139, 92, 246, 0.7)', 'rgba(217, 70, 239, 0.7)'], borderColor: isDarkMode ? '#1F2937' : '#FFFFFF', borderWidth: 2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 15, font: { size: 12 } } }, tooltip: { bodyFont: { size: 12 }, titleFont: { size: 14, weight: 'bold' } } } }
+                });
+            } else {
+                console.warn("Canvas 'lancamentos-expenses-pie-chart' não encontrado.");
+            }
+        
+            // Bar Chart for Lancamentos Income vs Expenses
+            const barCtx = document.getElementById('lancamentos-income-expenses-bar-chart')?.getContext('2d');
+            if (barCtx) {
+                if (lancamentosIncomeExpensesBarChartInstance) lancamentosIncomeExpensesBarChartInstance.destroy();
+                lancamentosIncomeExpensesBarChartInstance = new Chart(barCtx, {
+                    type: 'bar',
+                    data: { labels: [], datasets: [{ label: 'Receitas', data: [], backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 4 }, { label: 'Despesas', data: [], backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: textColor, font: { size: 12 } }, grid: { color: gridColor } }, x: { ticks: { color: textColor, font: { size: 12 } }, grid: { display: false } } }, plugins: { legend: { position: 'top', labels: { color: textColor, font: { size: 14 } } }, tooltip: { bodyFont: { size: 12 }, titleFont: { size: 14, weight: 'bold' } } } }
+                });
+            } else {
+                 console.warn("Canvas 'lancamentos-income-expenses-bar-chart' não encontrado.");
+            }
+            console.log("Gráficos da página de lançamentos inicializados/re-inicializados.");
+        }
+
+        function updateLancamentosCharts(filteredLancamentos, selectedMonth) {
+            if (!lancamentosExpensesPieChartInstance || !lancamentosIncomeExpensesBarChartInstance) {
+                console.warn("Instâncias dos gráficos de lançamentos não encontradas. Pulando atualização.");
+                return;
+            }
+
+            let totalReceitas = 0;
+            let totalDespesas = 0;
+            const despesasPorCategoria = {};
+
+            filteredLancamentos.forEach(lanc => {
+                if (lanc.tipo === 'receita') {
+                    totalReceitas += lanc.valor;
+                } else {
+                    totalDespesas += lanc.valor;
+                    despesasPorCategoria[lanc.categoria] = (despesasPorCategoria[lanc.categoria] || 0) + lanc.valor;
+                }
+            });
+
+            // Update Pie Chart
+            lancamentosExpensesPieChartInstance.data.labels = Object.keys(despesasPorCategoria);
+            lancamentosExpensesPieChartInstance.data.datasets[0].data = Object.values(despesasPorCategoria);
+            lancamentosExpensesPieChartInstance.update();
+
+            // Update Bar Chart
+            const monthLabel = selectedMonth === "all" ? "Total Geral" : (formatMonthYear(selectedMonth) || selectedMonth);
+            lancamentosIncomeExpensesBarChartInstance.data.labels = [monthLabel];
+            lancamentosIncomeExpensesBarChartInstance.data.datasets[0].data = [totalReceitas]; // Receitas
+            lancamentosIncomeExpensesBarChartInstance.data.datasets[1].data = [totalDespesas]; // Despesas
+            lancamentosIncomeExpensesBarChartInstance.update();
+             console.log("Gráficos da página de lançamentos atualizados para o mês:", selectedMonth);
         }
         
         function renderLancamentosList(lancamentos, containerEl) {
@@ -1104,6 +1391,10 @@
                            <p class="font-bold text-lg ${valorCor}">
                                 ${isReceita ? '+' : '-'} R$ ${lanc.valor.toFixed(2)}
                            </p>
+                           <div class="mt-2">
+                                <button data-id="${lanc.id}" class="edit-lancamento-btn px-3 py-1 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-md shadow-sm">Editar</button>
+                                <button data-id="${lanc.id}" class="remove-lancamento-btn px-3 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md shadow-sm ml-2">Remover</button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1333,14 +1624,19 @@
                 document.documentElement.classList.remove('dark');
             }
             updateAllThemeIcons();
-            // Redesenha os gráficos se a página atual for o dashboard
-            if (window.location.hash.slice(1) === '/' || window.location.hash === '') {
-                 // Atraso para garantir que o DOM do dashboard foi renderizado
-                if (typeof Chart !== 'undefined') {
-                    setTimeout(initCharts, 50);
-                } else {
-                    console.warn("Chart não definido ao tentar redesenhar para o tema.");
-                }
+            
+            const currentPage = window.location.hash.slice(1) || (currentUserId ? protectedDefaultRoute : defaultRoute);
+            if (typeof Chart !== 'undefined') {
+                // A small delay can help ensure the DOM is ready for chart rendering/re-rendering
+                setTimeout(() => {
+                    if (currentPage === '/' || currentPage === '') { // Dashboard
+                        initCharts(); 
+                    } else if (currentPage === '/lancamentos') { // Lancamentos page
+                        initLancamentosCharts();
+                    }
+                }, 50);
+            } else {
+                console.warn("Chart não definido ao tentar redesenhar para o tema.");
             }
         }
 
