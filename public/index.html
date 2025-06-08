@@ -584,7 +584,8 @@
             deleteDoc,
             updateDoc,
             writeBatch,
-            Timestamp
+            Timestamp,
+            getDocs
         } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
         // import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-analytics.js"; // Analytics não usado por enquanto
@@ -1175,7 +1176,13 @@ async function fetchMonthlySummaries(numMonths) {
             
             if (typeof Chart !== 'undefined') {
                 // This function is for the dashboard, ensure it targets dashboard instances
-                updateDashboardCharts(despesasPorCategoria, totalReceitas, totalDespesas);
+                // The call to updateDashboardCharts was removed here as per instructions.
+                // The pie chart (expensesPieChartInstance) is updated directly below if it exists.
+                if(expensesPieChartInstance) {
+                    expensesPieChartInstance.data.labels = Object.keys(despesasPorCategoria);
+                    expensesPieChartInstance.data.datasets[0].data = Object.values(despesasPorCategoria);
+                    expensesPieChartInstance.update();
+                }
             }
 
             const recentListEl = document.getElementById('recent-lancamentos-list');
