@@ -982,9 +982,67 @@
             }
         }
 
+async function fetchMonthlySummaries(numMonths) {
+    if (!currentUserId) return { labels: [], receitaData: [], despesaData: [] };
 
+    const summaries = [];
+    const monthLabels = [];
+    const now = new Date();
+    now.setDate(1); // Start from the first day of the current month for consistency
+
+    for (let i = numMonths - 1; i >= 0; i--) {
+        const targetMonth = new Date(now);
+        targetMonth.setMonth(now.getMonth() - i);
+        
+        const monthLabel = targetMonth.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+        monthLabels.push(monthLabel);
+
+        const firstDayOfMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1);
+        const lastDayOfMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0, 23, 59, 59); // End of the last day
+
+        // Firestore query (ensure `db`, `collection`, `query`, `where`, `Timestamp`, `getDocs` are available in scope)
+        const q = query(
+            collection(db, 'lancamentos'),
+            where("userId", "==", currentUserId),
+            where("data", ">=", Timestamp.fromDate(firstDayOfMonth)),
+            where("data", "<=", Timestamp.fromDate(lastDayOfMonth))
+        );
+
+        let monthlyReceita = 0;
+        let monthlyDespesa = 0;
+
+        try {
+            const querySnapshot = await getDocs(q);
+            querySnapshot.forEach(doc => {
+                const lanc = doc.data();
+                if (lanc.tipo === 'receita') {
+                    monthlyReceita += lanc.valor;
+                } else {
+                    monthlyDespesa += lanc.valor;
+                }
+            });
+        } catch (error) {
+            console.error(`Error fetching data for month ${monthLabel}:`, error);
+            // Continue to next month, data will be 0 for this month
+        }
+        summaries.push({ month: monthLabel, receita: monthlyReceita, despesa: monthlyDespesa });
+    }
+    
+    // Ensure summaries are in the correct order as monthLabels
+    const orderedReceitaData = monthLabels.map(label => {
+        const summary = summaries.find(s => s.month === label);
+        return summary ? summary.receita : 0;
+    });
+    const orderedDespesaData = monthLabels.map(label => {
+        const summary = summaries.find(s => s.month === label);
+        return summary ? summary.despesa : 0;
+    });
+
+    return { labels: monthLabels, receitaData: orderedReceitaData, despesaData: orderedDespesaData };
+}
         // --- Lógica do Dashboard ---
         async function initDashboardPage() {
+            console.log('Attempting to initialize Dashboard Page - Test Log');
             if (!currentUserId) {
                 navigateTo('/login');
                 return;
@@ -1007,6 +1065,74 @@
             
             // Inicia o listener de lançamentos para o dashboard
             listenForLancamentosDashboard();
+
+   // Fetch data for the 6-month bar chart and update it
+   const monthlyData = await fetchMonthlySummaries(6);
+   if (incomeExpensesBarChartInstance) { // Check if chart instance exists
+       incomeExpensesBarChartInstance.data.labels = monthlyData.labels;
+       incomeExpensesBarChartInstance.data.datasets[0].data = monthlyData.receitaData; // Receitas
+       incomeExpensesBarChartInstance.data.datasets[1].data = monthlyData.despesaData; // Despesas
+       incomeExpensesBarChartInstance.update();
+   } else {
+       console.warn("incomeExpensesBarChartInstance not found during initDashboardPage for monthly update.");
+   }
+
+   // Event listener for edit/remove buttons in recent lancamentos on Dashboard
+   const recentLancamentosListEl = document.getElementById('recent-lancamentos-list');
+   if (recentLancamentosListEl) {
+       recentLancamentosListEl.addEventListener('click', async (event) => {
+           const editButton = event.target.closest('.edit-lancamento-btn');
+           const removeButton = event.target.closest('.remove-lancamento-btn');
+
+           if (editButton) {
+               const lancamentoId = editButton.dataset.id;
+               if (!lancamentoId) {
+                   console.error("ID do lançamento não encontrado no botão de editar (Dashboard).");
+                   return;
+               }
+               
+               console.log(`Tentando editar lançamento com ID (Dashboard): ${lancamentoId}`);
+               // Path for lancamentos is now just 'lancamentos/documentId'
+               const docRef = doc(db, 'lancamentos', lancamentoId); 
+               try {
+                   const docSnap = await getDoc(docRef);
+                   if (docSnap.exists()) {
+                       const lancamentoData = docSnap.data();
+                       console.log("Dados do lançamento para edição (Dashboard):", lancamentoData);
+                       // Assuming showModal and initLancamentoModal are globally available
+                       showModal('lancamento-modal-template', initLancamentoModal, { id: lancamentoId, ...lancamentoData });
+                   } else {
+                       console.error("Nenhum documento encontrado para editar com ID (Dashboard):", lancamentoId);
+                       alert("Erro: Lançamento não encontrado para edição.");
+                   }
+               } catch (error) {
+                   console.error("Erro ao buscar lançamento para edição (Dashboard):", error);
+                   alert("Erro ao carregar dados do lançamento para edição.");
+               }
+           } else if (removeButton) {
+               const lancamentoId = removeButton.dataset.id;
+               if (!lancamentoId) {
+                   console.error("ID do lançamento não encontrado no botão de remover (Dashboard).");
+                   return;
+               }
+               // Assuming handleDeleteLancamento is globally available and handles confirmation
+               await handleDeleteLancamento(lancamentoId); 
+           }
+       });
+   } else {
+       console.warn("'recent-lancamentos-list' element not found in initDashboardPage for attaching event listeners.");
+   }
+
+   // Event listener for the "View All" lancamentos button on Dashboard
+   const viewAllLancamentosBtn = document.getElementById('view-all-lancamentos');
+   if (viewAllLancamentosBtn) {
+       viewAllLancamentosBtn.addEventListener('click', (event) => {
+           event.preventDefault(); // Good practice for buttons that navigate
+           navigateTo('#/lancamentos'); // Assuming navigateTo is globally available
+       });
+   } else {
+       console.warn("'view-all-lancamentos' button not found in initDashboardPage.");
+   }
         }
 
         function listenForLancamentosDashboard() {
@@ -1058,29 +1184,31 @@
             }
         }
 
-        function updateDashboardCharts(despesasPorCategoria, totalReceitas, totalDespesas) {
-            // Specific to Dashboard Pie Chart
-            if(expensesPieChartInstance) {
-                expensesPieChartInstance.data.labels = Object.keys(despesasPorCategoria);
-                expensesPieChartInstance.data.datasets[0].data = Object.values(despesasPorCategoria);
-                expensesPieChartInstance.update();
-            }
+/*
+function updateDashboardCharts(despesasPorCategoria, totalReceitas, totalDespesas) {
+    // Specific to Dashboard Pie Chart
+    if(expensesPieChartInstance) {
+        expensesPieChartInstance.data.labels = Object.keys(despesasPorCategoria);
+        expensesPieChartInstance.data.datasets[0].data = Object.values(despesasPorCategoria);
+        expensesPieChartInstance.update();
+    }
 
-            // Specific to Dashboard Bar Chart (if it were to show monthly summary, it would need different data)
-            // For now, the dashboard bar chart is static or updated elsewhere.
-            // If it's meant to show current month's income vs expense like the lancamentos page,
-            // it would need totalReceitas and totalDespesas for the current month.
-            // Example if dashboard bar chart needs to be updated with current month totals:
-            /*
-            if(incomeExpensesBarChartInstance) {
-                const currentMonthLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-                incomeExpensesBarChartInstance.data.labels = [currentMonthLabel];
-                incomeExpensesBarChartInstance.data.datasets[0].data = [totalReceitas];
-                incomeExpensesBarChartInstance.data.datasets[1].data = [totalDespesas];
-                incomeExpensesBarChartInstance.update();
-            }
-            */
-        }
+    // Specific to Dashboard Bar Chart (if it were to show monthly summary, it would need different data)
+    // For now, the dashboard bar chart is static or updated elsewhere.
+    // If it's meant to show current month's income vs expense like the lancamentos page,
+    // it would need totalReceitas and totalDespesas for the current month.
+    // Example if dashboard bar chart needs to be updated with current month totals:
+    /*
+    if(incomeExpensesBarChartInstance) {
+        const currentMonthLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        incomeExpensesBarChartInstance.data.labels = [currentMonthLabel];
+        incomeExpensesBarChartInstance.data.datasets[0].data = [totalReceitas];
+        incomeExpensesBarChartInstance.data.datasets[1].data = [totalDespesas];
+        incomeExpensesBarChartInstance.update();
+    }
+    *
+}
+*/
 
         function updateCharts(despesasPorCategoria) { // This seems to be a duplicate or old name
             const labels = Object.keys(despesasPorCategoria);
@@ -1496,7 +1624,20 @@
                 if (expensesPieChartInstance) expensesPieChartInstance.destroy();
                 expensesPieChartInstance = new Chart(expensesCtx, {
                     type: 'doughnut',
-                    data: { labels: [], datasets: [{ data: [], backgroundColor: ['rgba(239, 68, 68, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(16, 185, 129, 0.7)', 'rgba(139, 92, 246, 0.7)'], borderColor: isDarkMode ? '#1F2937' : '#FFFFFF', borderWidth: 2 }] },
+                    data: { 
+                        labels: [], // Initially empty
+                        datasets: [{ 
+                            data: [], // Initially empty
+                            backgroundColor: [
+                                'rgba(239, 68, 68, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(234, 179, 8, 0.7)', 
+                                'rgba(34, 197, 94, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(139, 92, 246, 0.7)', 
+                                'rgba(217, 70, 239, 0.7)', 'rgba(107, 114, 128, 0.7)', 'rgba(244, 114, 182, 0.7)', 
+                                'rgba(250, 204, 21, 0.7)' 
+                            ],
+                            borderColor: isDarkMode ? '#1F2937' : '#FFFFFF', // isDarkMode should be defined in this scope
+                            borderWidth: 2 
+                        }] 
+                    },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 20, font: { size: 14 } } }, tooltip: { bodyFont: { size: 14 }, titleFont: { size: 16, weight: 'bold' } } } }
                 });
             }
@@ -1506,7 +1647,13 @@
                 if (incomeExpensesBarChartInstance) incomeExpensesBarChartInstance.destroy();
                 incomeExpensesBarChartInstance = new Chart(incomeExpensesCtx, {
                     type: 'bar',
-                    data: { labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'], datasets: [{ label: 'Receitas', data: [], backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 4 }, { label: 'Despesas', data: [], backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 4 }] },
+                    data: { 
+                        labels: [], // Initially empty
+                        datasets: [
+                            { label: 'Receitas', data: [], backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 4 }, 
+                            { label: 'Despesas', data: [], backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 4 }
+                        ] 
+                    },
                     options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: textColor, font: { size: 12 } }, grid: { color: gridColor } }, x: { ticks: { color: textColor, font: { size: 12 } }, grid: { display: false } } }, plugins: { legend: { position: 'top', labels: { color: textColor, font: { size: 14 } } }, tooltip: { bodyFont: { size: 14 }, titleFont: { size: 16, weight: 'bold' } } } }
                 });
             }
