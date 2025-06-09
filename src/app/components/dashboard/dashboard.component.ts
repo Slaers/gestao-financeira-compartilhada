@@ -24,6 +24,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       legend: {
         display: true,
         position: 'top',
+        labels: { // Added for dark theme
+          color: '#ccc' // Light gray for legend text
+        }
       },
       tooltip: {
         callbacks: {
@@ -57,19 +60,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
    public barChartOptions: ChartConfiguration['options'] = {
     responsive: true,
     scales: {
-      x: {},
+      x: {
+        ticks: {
+          color: '#ccc' // Light gray for x-axis labels
+        },
+        grid: { // Added for dark theme
+          color: 'rgba(255, 255, 255, 0.1)' // Dim grid lines
+        }
+      },
       y: {
         beginAtZero: true,
         ticks: {
+          color: '#ccc', // Light gray for y-axis labels
           callback: function(value) {
             return 'R$ ' + value;
           }
+        },
+        grid: { // Added for dark theme
+          color: 'rgba(255, 255, 255, 0.1)' // Dim grid lines
         }
       }
     },
     plugins: {
       legend: {
         display: true,
+        labels: { // Added for dark theme
+          color: '#ccc' // Light gray for legend text
+        }
       },
       tooltip: {
         callbacks: {
@@ -106,10 +123,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   loadLancamentos(): void {
     this.lancamentosSubscription = this.lancamentoService.getLancamentos().subscribe({
       next: (lancamentos) => {
+        console.log('Dashboard: Lancamentos fetched:', lancamentos); // ADDED
+        if (!lancamentos || lancamentos.length === 0) {
+          console.log('Dashboard: No lancamentos data to process for charts.'); // ADDED
+        }
         this.processLancamentosForCharts(lancamentos);
       },
       error: (err) => {
-        console.error('Error loading lancamentos for dashboard:', err);
+        console.error('Dashboard: Error loading lancamentos:', err); // MODIFIED to be more specific
         this.errorMessage = 'Erro ao carregar dados para o dashboard.';
       }
     });
@@ -132,6 +153,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.pieChartData.datasets[0].data = [];
         this.hasDespesasData = false;
     }
+    console.log('Dashboard: Pie Chart Data:', JSON.stringify(this.pieChartData)); // ADDED
+    console.log('Dashboard: Has Despesas Data:', this.hasDespesasData); // ADDED
 
 
     // Process for Bar Chart (Revenue vs Expenses - last 6 months)
@@ -171,8 +194,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Important: To make ng2-charts update, we might need to create new objects for chart data/labels
     // or use the chart instance to call update(). For simplicity, direct assignment is used first.
     // If charts don't update, will need to trigger change detection or re-assign chart objects.
+    console.log('Dashboard: Bar Chart Data:', JSON.stringify(this.barChartData)); // ADDED
+    console.log('Dashboard: Has Movimentacoes Data:', this.hasMovimentacoesData); // ADDED
     this.pieChartData = { ...this.pieChartData };
     this.barChartData = { ...this.barChartData };
+    console.log('Dashboard: Charts data updated and change detection triggered.'); // ADDED
 
   }
 

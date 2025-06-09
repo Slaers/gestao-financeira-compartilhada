@@ -6,3 +6,20 @@
   /* height: 40vh; */
   /* width: 80vw; */
 }
+
+/* src/app/components/dashboard/dashboard.component.css */
+.chart-container {
+  position: relative;
+  margin: auto;
+  /* background-color: #333; /* Optional: if charts need a slightly different dark bg */
+  /* padding: 1rem; */
+  /* border-radius: .25rem; */
+}
+
+/* If Bootstrap's dark theme doesn't cover everything, add more specific styles */
+/* For example, if h2 or other text isn't adapting: */
+/*
+h2, h3 {
+  color: #eee;
+}
+*/

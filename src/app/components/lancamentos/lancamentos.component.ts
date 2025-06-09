@@ -32,13 +32,16 @@ export class LancamentosComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    console.log('LancamentosComponent: tiposPagamento initialized:', this.tiposPagamento); // Existing log
     this.authSubscription = this.authService.getCurrentUser().subscribe(user => {
+      console.log('LancamentosComponent: Current user from AuthService:', user); // ADDED
       this.currentUser = user;
       if (user) {
+        console.log('LancamentosComponent: User is logged in. ID:', user.id, 'Name:', user.nome); // ADDED
         this.model.usuarioId = user.id;
-        this.model.nomeUsuario = user.nome; // Denormalizing user name
+        this.model.nomeUsuario = user.nome;
       } else {
-        // Handle case where user is not logged in, perhaps redirect or show message
+        console.log('LancamentosComponent: User is not logged in or user data is null.'); // ADDED
         this.errorMessage = "Usuário não autenticado. Faça login para registrar um lançamento.";
       }
     });
