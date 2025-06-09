@@ -1,8 +1,0 @@
-.chart-container {
-  position: relative;
-  margin: auto;
-  /* Consider setting a height or aspect ratio if charts don't render well, */
-  /* but ng2-charts with responsive options usually handles this. */
-  /* height: 40vh; */
-  /* width: 80vw; */
-}
