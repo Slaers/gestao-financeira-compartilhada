@@ -2,39 +2,22 @@ import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
   onAuthStateChanged, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut,
-  User
-} from "firebase/auth";
-import { getFirestore, collection, addDoc, query, where, getDocs, doc, onSnapshot } from "firebase/firestore";
+  User // Keep User for now, might be replaced by Usuario
+} from "firebase/auth"; // createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, onAuthStateChanged might be removable if not used elsewhere
+import { getFirestore, collection, addDoc, query, where, getDocs, doc, onSnapshot } from "firebase/firestore"; // getFirestore might be removable
 import Chart from 'chart.js/auto';
+import { authService } from './services/auth.service';
+import { Usuario } from './models/usuario.model'; // Import Usuario model
 
 // *********************************************************************************
 // Configuração do Firebase com as suas credenciais
 // *********************************************************************************
-const firebaseConfig = {
-    apiKey: "AIzaSyBeJyVD0Os7WWpEiObShsYzE2qoNRV3PY0",
-    authDomain: "gestao-finc-compartilhada.firebaseapp.com",
-    projectId: "gestao-finc-compartilhada",
-    storageBucket: "gestao-finc-compartilhada.appspot.com",
-    messagingSenderId: "988873226213",
-    appId: "1:988873226213:web:8cb05b07ba7c48e574e10c",
-    measurementId: "G-WGWJJXRT71"
-};
-
-// Inicialização do Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
+const db = authService.getDbInstance(); // Get DB instance from AuthService
 
 // --- Seleção de Elementos DOM ---
-const mainNav = document.getElementById('mainNav');
-const userStatus = document.getElementById('userStatus');
-const logoutBtn = document.getElementById('logoutBtn');
+// const mainNav = document.getElementById('mainNav'); // Removed
+const userStatus = document.getElementById('userStatus'); // userStatus is defined globally but re-fetched in updateUiForAuthState
+const logoutBtn = document.getElementById('logoutBtn'); // logoutBtn is defined globally but re-fetched in updateUiForAuthState
 
 // Vistas Principais
 const authView = document.getElementById('authView');
@@ -42,15 +25,15 @@ const lancamentosFormView = document.getElementById('lancamentosFormView');
 const dashboardView = document.getElementById('dashboardView');
 
 // Formulários de Autenticação
-const loginFormContainer = document.getElementById('loginFormContainer');
-const registerFormContainer = document.getElementById('registerFormContainer');
-const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
-const loginGoogleBtn = document.getElementById('loginGoogleBtn');
+// const loginFormContainer = document.getElementById('loginFormContainer');
+// const registerFormContainer = document.getElementById('registerFormContainer');
+// const loginForm = document.getElementById('loginForm');
+// const registerForm = document.getElementById('registerForm');
+const loginBtn = document.getElementById('loginBtn'); // Changed from loginGoogleBtn
 
 // Links para alternar formulários
-const showRegisterLink = document.getElementById('showRegisterLink');
-const showLoginLink = document.getElementById('showLoginLink');
+// const showRegisterLink = document.getElementById('showRegisterLink');
+// const showLoginLink = document.getElementById('showLoginLink');
 
 // Botões de Navegação Principal
 const showDashboardBtn = document.getElementById('showDashboardBtn');
@@ -67,17 +50,6 @@ let barChart: Chart | null = null;
 
 
 // --- Lógica de UI ---
-
-/**
- * Alterna a visibilidade entre os formulários de login e cadastro.
- * @param showRegister {boolean} - Se true, mostra o formulário de cadastro; senão, mostra o de login.
- */
-function toggleAuthForms(showRegister: boolean): void {
-  if (loginFormContainer && registerFormContainer) {
-    loginFormContainer.style.display = showRegister ? 'none' : 'block';
-    registerFormContainer.style.display = showRegister ? 'block' : 'none';
-  }
-}
 
 /**
  * Alterna a visibilidade das vistas principais da aplicação.
@@ -99,82 +71,111 @@ function switchMainView(viewToShow: 'auth' | 'dashboard' | 'form'): void {
 
 /**
  * Atualiza a interface do utilizador com base no estado de autenticação.
- * @param user {User | null} - O objeto do utilizador do Firebase, ou null se não estiver autenticado.
+ * @param user {Usuario | null} - O objeto do utilizador da aplicação, ou null se não estiver autenticado.
  */
-function updateUiForAuthState(user: User | null): void {
+function updateUiForAuthState(user: Usuario | null): void {
+  const userStatusDiv = document.getElementById('userStatus');
+  const loginButton = document.getElementById('loginBtn');
+  const logoutButton = document.getElementById('logoutBtn');
+  const dashboardButton = document.getElementById('showDashboardBtn');
+  const lancamentoFormButton = document.getElementById('showLancamentoFormBtn');
+
   if (user) {
-    // Utilizador está autenticado
-    userStatus!.textContent = `Bem-vindo, ${user.email}`;
-    userStatus!.style.display = 'block';
-    mainNav!.style.display = 'block';
-    switchMainView('dashboard'); // Mostra o dashboard como vista inicial após o login
-    fetchAndRenderCharts(user.uid);
+    // User is authenticated
+    if (userStatusDiv) userStatusDiv.textContent = `Bem-vindo, ${user.email || 'Usuário'}`;
+    if (loginButton) loginButton.style.display = 'none';
+    if (logoutButton) logoutButton.style.display = 'block';
+    if (dashboardButton) dashboardButton.style.display = 'inline-block'; // Or 'block' depending on layout
+    if (lancamentoFormButton) lancamentoFormButton.style.display = 'inline-block'; // Or 'block'
+
+    switchMainView('dashboard');
+    fetchAndRenderCharts(user.id);
   } else {
-    // Utilizador não está autenticado
-    userStatus!.style.display = 'none';
-    mainNav!.style.display = 'none';
+    // User is not authenticated
+    if (userStatusDiv) userStatusDiv.textContent = 'Você não está logado.'; // Clear or set to a default message
+    if (loginButton) loginButton.style.display = 'block';
+    if (logoutButton) logoutButton.style.display = 'none';
+    if (dashboardButton) dashboardButton.style.display = 'none';
+    if (lancamentoFormButton) lancamentoFormButton.style.display = 'none';
+
     switchMainView('auth');
+
+    // Clear charts if they exist
+    if (pieChart) {
+      pieChart.destroy();
+      pieChart = null;
+    }
+    if (barChart) {
+      barChart.destroy();
+      barChart = null;
+    }
+    // Hide no data messages for charts if they are part of auth view cleanup
+    // Assuming these elements exist in index.html for when charts are empty
+    const pieChartNoData = document.getElementById('pieChartNoDataMessage');
+    const barChartNoData = document.getElementById('barChartNoDataMessage');
+    if (pieChartNoData) pieChartNoData.style.display = 'none';
+    if (barChartNoData) barChartNoData.style.display = 'none';
   }
 }
 
 // --- Event Listeners de Autenticação ---
 
 // Link para mostrar o formulário de cadastro
-showRegisterLink?.addEventListener('click', (e) => {
-  e.preventDefault();
-  toggleAuthForms(true);
-});
+// showRegisterLink?.addEventListener('click', (e) => {
+//   e.preventDefault();
+//   toggleAuthForms(true);
+// });
 
 // Link para mostrar o formulário de login
-showLoginLink?.addEventListener('click', (e) => {
-  e.preventDefault();
-  toggleAuthForms(false);
-});
+// showLoginLink?.addEventListener('click', (e) => {
+//   e.preventDefault();
+//   toggleAuthForms(false);
+// });
 
 // Submissão do formulário de login com email/senha
-loginForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = (document.getElementById('loginEmail') as HTMLInputElement).value;
-  const password = (document.getElementById('loginPassword') as HTMLInputElement).value;
+// loginForm?.addEventListener('submit', async (e) => {
+//   e.preventDefault();
+//   const email = (document.getElementById('loginEmail') as HTMLInputElement).value;
+//   const password = (document.getElementById('loginPassword') as HTMLInputElement).value;
 
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-    console.log('Login bem-sucedido!');
-    (loginForm as HTMLFormElement).reset();
-  } catch (error: any) {
-    console.error('Erro de login:', error);
-    alert(`Erro ao fazer login: ${error.message}`);
-  }
-});
+//   try {
+//     await signInWithEmailAndPassword(auth, email, password);
+//     console.log('Login bem-sucedido!');
+//     (loginForm as HTMLFormElement).reset();
+//   } catch (error: any) {
+//     console.error('Erro de login:', error);
+//     alert(`Erro ao fazer login: ${error.message}`);
+//   }
+// });
 
 // Submissão do formulário de cadastro com email/senha
-registerForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = (document.getElementById('registerEmail') as HTMLInputElement).value;
-  const password = (document.getElementById('registerPassword') as HTMLInputElement).value;
+// registerForm?.addEventListener('submit', async (e) => {
+//   e.preventDefault();
+//   const email = (document.getElementById('registerEmail') as HTMLInputElement).value;
+//   const password = (document.getElementById('registerPassword') as HTMLInputElement).value;
 
-   if (password.length < 6) {
-    alert("A senha deve ter pelo menos 6 caracteres.");
-    return;
-  }
+//    if (password.length < 6) {
+//     alert("A senha deve ter pelo menos 6 caracteres.");
+//     return;
+//   }
 
-  try {
-    await createUserWithEmailAndPassword(auth, email, password);
-    console.log('Cadastro bem-sucedido!');
-    (registerForm as HTMLFormElement).reset();
-  } catch (error: any) {
-    console.error('Erro de cadastro:', error);
-    alert(`Erro ao cadastrar: ${error.message}`);
-  }
-});
+//   try {
+//     await createUserWithEmailAndPassword(auth, email, password);
+//     console.log('Cadastro bem-sucedido!');
+//     (registerForm as HTMLFormElement).reset();
+//   } catch (error: any) {
+//     console.error('Erro de cadastro:', error);
+//     alert(`Erro ao cadastrar: ${error.message}`);
+//   }
+// });
 
 // Botão de login com Google
-loginGoogleBtn?.addEventListener('click', async () => {
+loginBtn?.addEventListener('click', async () => { // Changed from loginGoogleBtn
   try {
-    await signInWithPopup(auth, provider);
-    console.log('Login com Google bem-sucedido!');
+    await authService.googleSignIn();
+    console.log('Login com Google iniciado via authService!');
   } catch (error: any) {
-    console.error('Erro de login com Google:', error);
+    console.error('Erro de login com Google em main.ts:', error);
     alert(`Erro com o Google: ${error.message}`);
   }
 });
@@ -182,10 +183,10 @@ loginGoogleBtn?.addEventListener('click', async () => {
 // Botão de logout
 logoutBtn?.addEventListener('click', async () => {
   try {
-    await signOut(auth);
-    console.log('Logout bem-sucedido.');
+    await authService.signOutUser();
+    console.log('Logout iniciado via authService.');
   } catch (error: any) {
-    console.error('Erro de logout:', error);
+    console.error('Erro de logout em main.ts:', error);
     alert(`Erro ao sair: ${error.message}`);
   }
 });
@@ -202,14 +203,14 @@ showLancamentoFormBtn?.addEventListener('click', () => switchMainView('form'));
 // Submissão do formulário de novo lançamento
 novoLancamentoForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!auth.currentUser) {
+    if (!currentUser) { // Use currentUser
         alert("Você precisa estar logado para fazer um lançamento.");
         return;
     }
 
     const formData = new FormData(novoLancamentoForm as HTMLFormElement);
     const lancamento = {
-        uid: auth.currentUser.uid,
+        uid: currentUser.id, // Use currentUser.id
         descricao: formData.get('descricao'),
         valor: parseFloat(formData.get('valor') as string),
         data: formData.get('data'),
@@ -220,7 +221,7 @@ novoLancamentoForm?.addEventListener('submit', async (e) => {
     };
     
     try {
-        await addDoc(collection(db, "lancamentos"), lancamento);
+        await addDoc(collection(db, "lancamentos"), lancamento); // Uses db from authService
         formSuccessMessage!.textContent = "Lançamento salvo com sucesso!";
         formSuccessMessage!.style.display = "block";
         formErrorMessage!.style.display = "none";
@@ -228,7 +229,9 @@ novoLancamentoForm?.addEventListener('submit', async (e) => {
         setTimeout(() => { formSuccessMessage!.style.display = "none"; }, 3000);
         
         // Atualiza os gráficos após novo lançamento
-        fetchAndRenderCharts(auth.currentUser.uid);
+        if (currentUser) {
+            fetchAndRenderCharts(currentUser.id); // Use currentUser.id
+        }
 
     } catch (error: any) {
         formErrorMessage!.textContent = `Erro ao salvar: ${error.message}`;
@@ -244,7 +247,7 @@ novoLancamentoForm?.addEventListener('submit', async (e) => {
  * @param uid {string} - O ID do utilizador do Firebase.
  */
 async function fetchAndRenderCharts(uid: string) {
-    const q = query(collection(db, "lancamentos"), where("uid", "==", uid));
+    const q = query(collection(db, "lancamentos"), where("uid", "==", uid)); // Uses db from authService
     const querySnapshot = await getDocs(q);
     const lancamentos = querySnapshot.docs.map(doc => doc.data());
 
@@ -313,6 +316,13 @@ async function fetchAndRenderCharts(uid: string) {
 
 // --- Observador Principal de Autenticação ---
 // Este é o ponto de entrada principal que reage às mudanças de estado de login/logout.
-onAuthStateChanged(auth, (user) => {
+let currentUser: Usuario | null = null; // Variable to hold the current user state
+
+authService.onAuthStateChangedWrapper((user) => {
+  currentUser = user; // Update currentUser whenever auth state changes
   updateUiForAuthState(user);
+  // Potentially call fetchAndRenderCharts here if user is logged in
+  // if (user) {
+  //   fetchAndRenderCharts(user.id);
+  // }
 });
